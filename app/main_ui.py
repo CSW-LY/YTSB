@@ -521,6 +521,8 @@ def create_app():
                 if hasattr(rule, key):
                     setattr(rule, key, value)
             await session.commit()
+            # Refresh the rule to get the updated timestamp from database trigger
+            await session.refresh(rule)
             # Return a dict instead of the model object to avoid serialization issues
             return {
                 "id": rule.id,
