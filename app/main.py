@@ -161,7 +161,7 @@ def create_app() -> FastAPI:
 
         return ReadyResponse(
             ready=ready,
-            model_loaded=model_loaded,
+            is_model_loaded=model_loaded,
             database_connected=database_connected,
             cache_connected=cache_connected,
         )

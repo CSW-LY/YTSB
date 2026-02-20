@@ -139,9 +139,39 @@ def create_app():
     async def health_check():
         return HealthResponse(status="ok")
 
-    @app.get("/ready")
+    @app.get("/ready", response_model=ReadyResponse)
     async def ready_check():
-        return ReadyResponse(status="ready")
+        """Readiness check endpoint."""
+        # Check database
+        from sqlalchemy import text
+        database_connected = False
+        try:
+            async with async_session_maker() as session:
+                await session.execute(text("SELECT 1"))
+                database_connected = True
+        except Exception:
+            pass
+
+        # Check cache
+        cache_connected = cache_manager._pool is not None
+
+        # Check if model is loaded
+        model_loaded = False
+        try:
+            from app.services.intent_service import IntentService
+            intent_service = IntentService()
+            model_loaded = hasattr(intent_service, "_embedding_model") and intent_service._embedding_model is not None
+        except Exception:
+            pass
+
+        ready = database_connected
+
+        return ReadyResponse(
+            ready=ready,
+            is_model_loaded=model_loaded,
+            database_connected=database_connected,
+            cache_connected=cache_connected,
+        )
 
     @app.get("/api/ui/config")
     async def get_ui_config():
