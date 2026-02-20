@@ -29,12 +29,43 @@ print(f"Config: http://localhost:{settings.api_port}/api/ui/config")
 print("=" * 60)
 
 if __name__ == "__main__":
+    import time
+    import logging
+    
+    # 设置根日志级别为DEBUG
+    logging.basicConfig(level=logging.DEBUG)
+    logger = logging.getLogger(__name__)
+    
+    # 直接在启动时加载模型，验证模型加载过程
+    logger.info("=== Direct model loading test ===")
+    start_time = time.time()
+    
+    try:
+        from app.ml.embedding import get_embedding_model
+        embedding_model = get_embedding_model()
+        logger.info("Loading embedding model...")
+        
+        # 同步加载模型（为了测试）
+        import asyncio
+        asyncio.run(embedding_model.load())
+        
+        load_time = (time.time() - start_time) * 1000
+        logger.info(f"Model loaded successfully in {load_time:.2f}ms")
+        logger.info(f"Model dimension: {embedding_model.dimension}")
+    except Exception as e:
+        logger.error(f"Failed to load model: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    logger.info("=== Creating app ===")
     from app.main_ui import create_app
     app = create_app()
+    
+    logger.info("=== Starting uvicorn ===")
     uvicorn.run(
         app,
         host=settings.api_host,
         port=settings.api_port,
         reload=settings.debug,
-        log_level="info",
+        log_level="debug",
     )

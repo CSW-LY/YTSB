@@ -55,18 +55,23 @@ class KeywordRecognizer(IntentRecognizer):
                 continue
 
             # Normalize keyword
-            keyword = rule.content.strip().lower()
+            content = rule.content.strip().lower()
 
             # Check for exact match marker (starts with ^)
-            if keyword.startswith("^"):
-                exact_keyword = keyword[1:].strip()
+            if content.startswith("^"):
+                exact_keyword = content[1:].strip()
                 self._exact_match_index[exact_keyword] = category
             else:
-                # Add to pattern index
-                if keyword not in self._keyword_index:
-                    self._keyword_index[keyword] = []
+                # 处理逗号分隔的多个关键词
+                keywords = [k.strip() for k in content.split(",")]
+                for keyword in keywords:
+                    if not keyword:
+                        continue
+                    # Add to pattern index
+                    if keyword not in self._keyword_index:
+                        self._keyword_index[keyword] = []
 
-                self._keyword_index[keyword].append((category, rule))
+                    self._keyword_index[keyword].append((category, rule))
 
     async def recognize(
         self,

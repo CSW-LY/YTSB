@@ -158,9 +158,9 @@ def create_app():
         # Check if model is loaded
         model_loaded = False
         try:
-            from app.services.intent_service import IntentService
-            intent_service = IntentService()
-            model_loaded = hasattr(intent_service, "_embedding_model") and intent_service._embedding_model is not None
+            from app.ml.embedding import get_embedding_model
+            embedding_model = get_embedding_model()
+            model_loaded = embedding_model.is_loaded
         except Exception:
             pass
 

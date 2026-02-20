@@ -1,6 +1,7 @@
 """FastAPI application entry point."""
 
 import logging
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 
@@ -39,11 +40,20 @@ async def lifespan(app: FastAPI):
     # Preload models for better performance
     try:
         logger.info("Preloading models...")
-        from app.services.intent_service import IntentService
-        # Initialize intent service to preload models
-        intent_service = IntentService()
-        # This will trigger model loading
-        logger.info("Models preloaded successfully")
+        start_time = time.time()
+        
+        # 1. 直接加载全局嵌入模型
+        from app.ml.embedding import get_embedding_model
+        embedding_model = get_embedding_model()
+        logger.info("Loading embedding model...")
+        await embedding_model.load()
+        
+        # 2. 初始化识别器链
+        from app.core.recognizer import get_recognizer_chain
+        recognizer_chain = await get_recognizer_chain()
+        
+        load_time = (time.time() - start_time) * 1000
+        logger.info(f"Models preloaded successfully in {load_time:.2f}ms")
     except Exception as e:
         logger.warning(f"Failed to preload models: {e}")
         logger.info("Models will load on first request")
