@@ -1,0 +1,2482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>意图识别服务</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background: #333;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .header div {
+            margin-top: 5px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .tab {
+            padding: 10px 20px;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .tab:hover {
+            background: #f0f0f0;
+        }
+        .tab.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        .panel {
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            display: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .panel.active {
+            display: block;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        .btn:hover {
+            background: #0069d9;
+        }
+        .btn:active {
+            background: #005cbf;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+            background: #f8f9fa;
+        }
+        .result.success {
+            border-left-color: #28a745;
+            background: #d4edda;
+            color: #155724;
+        }
+        .result.error {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .result.loading {
+            border-left-color: #ffc107;
+            background: #fff3cd;
+            color: #856404;
+        }
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .loading::before {
+            content: '';
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .code {
+            background: #f8f9fa;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        .hidden {
+            display: none !important;
+        }
+        
+        .api-key-masked {
+            font-family: monospace;
+        }
+        
+        .api-key-full {
+            font-family: monospace;
+            background: #f8f9fa;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        
+        .btn-sm {
+            padding: 2px 6px;
+            font-size: 10px;
+            border: 1px solid #ccc;
+            background: #f8f9fa;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        
+        .btn-sm:hover {
+            background: #e9ecef;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .modal-header h2 {
+            margin: 0;
+            font-size: 20px;
+        }
+        .modal-footer {
+            margin-top: 20px;
+            text-align: right;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #666;
+        }
+        .stat-card .value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>意图识别服务</h1>
+            <div>意图识别服务控制台</div>
+        </div>
+        <div class="tabs">
+            <button class="tab active" onclick="showPanel('test', event)">意图识别测试</button>
+            <button class="tab" onclick="showPanel('monitor', event)">监控仪表板</button>
+            <button class="tab" onclick="showPanel('rules', event)">规则管理</button>
+            <button class="tab" onclick="showPanel('categories', event)">分类管理</button>
+            <button class="tab" onclick="showPanel('apps', event)">应用管理</button>
+            <button class="tab" onclick="showPanel('api', event)">API密钥管理</button>
+            <button class="tab" onclick="showPanel('apiDebug', event)">API调试</button>
+        </div>
+        <div id="testPanel" class="panel active">
+            <h2>意图识别测试</h2>
+            <div class="form-group"><label>应用密钥</label><select id="appKey"><option value="">请选择应用密钥</option></select></div>
+            <div class="form-group hidden"><label>API密钥</label><select id="testApiKey"><option value="">请选择API密钥</option></select></div>
+            <div class="form-group"><label>输入文本</label><textarea id="inputText" placeholder="请输入要识别的文本..."></textarea></div>
+            <button class="btn" onclick="testIntent()">识别意图</button>
+            <div id="testResult" class="result hidden"></div>
+        </div>
+        <div id="monitorPanel" class="panel">
+            <h2>监控仪表板</h2>
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card"><h3>分类数</h3><div class="value" id="statCategories">-</div></div>
+                <div class="stat-card"><h3>规则数</h3><div class="value" id="statRules">-</div></div>
+                <div class="stat-card"><h3>应用数</h3><div class="value" id="statApps">-</div></div>
+                <div class="stat-card"><h3>缓存状态</h3><div class="value" id="statCache">-</div></div>
+            </div>
+            
+            <h3 style="margin-top: 30px; margin-bottom: 15px;">意图识别统计(最近24小时)</h3>
+            <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+                <div class="stat-card"><h3>总请求数</h3><div class="value" id="statRecognitionTotal">-</div></div>
+                <div class="stat-card"><h3>成功率</h3><div class="value" id="statRecognitionSuccessRate" style="color: #28a745;">-</div></div>
+                <div class="stat-card"><h3>失败率</h3><div class="value" id="statRecognitionFailureRate" style="color: #dc3545;">-</div></div>
+                <div class="stat-card"><h3>平均处理时间</h3><div class="value" id="statRecognitionAvgTime">-</div></div>
+            </div>
+
+            <h3 style="margin-top: 30px; margin-bottom: 15px;">热门意图</h3>
+            <div id="topIntentsList" style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                <div style="text-align: center; color: #6c757d;">正在加载热门意图...</div>
+            </div>
+            
+            <h3 style="margin-top: 30px; margin-bottom: 15px;">最近识别日志</h3>
+            <div id="logsTable" style="background: #f8f9fa; padding: 15px; border-radius: 8px; overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #e9ecef;">
+                            <th style="padding: 8px; border: 1px solid #dee2e6; text-align: left;">时间</th>
+                            <th style="padding: 8px; border: 1px solid #dee2e6; text-align: left;">应用密钥</th>
+                            <th style="padding: 8px; border: 1px solid #dee2e6; text-align: left;">输入文本</th>
+                            <th style="padding: 8px; border: 1px solid #dee2e6; text-align: left;">识别意图</th>
+                            <th style="padding: 8px; border: 1px solid #dee2e6; text-align: right;">置信度</th>
+                            <th style="padding: 8px; border: 1px solid #dee2e6; text-align: right;">耗时(毫秒)</th>
+                            <th style="padding: 8px; border: 1px solid #dee2e6; text-align: center;">状态</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logsTableBody">
+                        <tr>
+                            <td colspan="7" style="padding: 20px; text-align: center; border: 1px solid #dee2e6; color: #6c757d;">正在加载日志...</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">
+                    <button id="prevLogPage" class="btn" onclick="changeLogPage(-1)" style="padding: 5px 15px;">上一页</button>
+                    <span id="logPageInfo" style="color: #6c757d;">第1页</span>
+                    <button id="nextLogPage" class="btn" onclick="changeLogPage(1)" style="padding: 5px 15px;">下一页</button>
+                </div>
+            </div>
+
+            <button class="btn" onclick="loadStats()" style="margin-top: 20px;">刷新</button>
+        </div>
+        <div id="rulesPanel" class="panel">
+            <h2>规则管理</h2>
+            <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center;">
+                <select id="ruleTypeFilter" onchange="loadRules()" style="width: 180px;">
+                    <option value="all">所有规则类型</option>
+                    <option value="keyword">关键词规则</option>
+                    <option value="regex">正则表达式规则</option>
+                    <option value="semantic">语义规则</option>
+                </select>
+                <select id="categoryFilter" onchange="loadRules()" style="width: 180px;">
+                    <option value="all">所有分类</option>
+                </select>
+                <button class="btn" onclick="showAddRuleForm()">添加新规则</button>
+                <button class="btn" onclick="showAddCategoryForm()">添加新分类</button>
+                <button class="btn" onclick="loadRules()">刷新</button>
+            </div>
+            <div id="rulesTable" style="margin-bottom: 20px;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #f8f9fa;">
+                            <th style="padding: 10px; border: 1px solid #ddd;">ID</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">类型</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">内容</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">分类</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">权重</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rulesTableBody">
+                        <tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd;">正在加载规则...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination Controls -->
+            <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; justify-content: space-between;">
+                <div style="display: flex; gap: 5px; align-items: center;">
+                    <label>每页显示:</label>
+                    <select id="pageSize" onchange="loadRules()">
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="btn" onclick="changePage(-1)" id="prevPage" disabled>上一页</button>
+                    <span id="pageInfo">第1页/共1页</span>
+                    <button class="btn" onclick="changePage(1)" id="nextPage" disabled>下一页</button>
+                </div>
+            </div>
+        </div>
+        <div id="categoriesPanel" class="panel">
+            <h2>分类管理</h2>
+            <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center;">
+                <select id="categoryApplicationFilter" onchange="loadCategoriesList()" style="width: 250px;">
+                    <option value="">所有应用</option>
+                </select>
+                <button class="btn" onclick="showAddCategoryForm()">添加新分类</button>
+                <button class="btn" onclick="loadCategoriesList()">刷新</button>
+            </div>
+            <div id="categoriesTable" style="margin-bottom: 20px;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #f8f9fa;">
+                            <th style="padding: 10px; border: 1px solid #ddd;">ID</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">所属应用</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">名称</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">代码</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">描述</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="categoriesTableBody">
+                        <tr><td colspan="5" style="padding: 20px; text-align: center; border: 1px solid #ddd;">正在加载分类...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination Controls -->
+            <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; justify-content: space-between;">
+                <div style="display: flex; gap: 5px; align-items: center;">
+                    <label>每页显示:</label>
+                    <select id="categoryPageSize" onchange="loadCategoriesList()">
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="btn" onclick="changeCategoryPage(-1)" id="prevCategoryPage" disabled>上一页</button>
+                    <span id="categoryPageInfo">第1页/共1页</span>
+                    <button class="btn" onclick="changeCategoryPage(1)" id="nextCategoryPage" disabled>下一页</button>
+                </div>
+            </div>
+        </div>
+        <div id="appsPanel" class="panel">
+            <h2>应用管理</h2>
+            <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center;">
+                <button class="btn" onclick="showAddApplicationForm()">添加新应用</button>
+                <button class="btn" onclick="loadApplicationsList()">刷新</button>
+            </div>
+            <div id="applicationsTable" style="margin-bottom: 20px;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #f8f9fa;">
+                            <th style="padding: 10px; border: 1px solid #ddd;">ID</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">应用密钥</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">名称</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">描述</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">状态</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="applicationsTableBody">
+                        <tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd;">正在加载应用...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Controls -->
+            <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; justify-content: space-between;">
+                <div style="display: flex; gap: 5px; align-items: center;">
+                    <label>每页显示:</label>
+                    <select id="applicationPageSize" onchange="loadApplicationsList()">
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="btn" onclick="changeApplicationPage(-1)" id="prevApplicationPage" disabled>上一页</button>
+                    <span id="applicationPageInfo">第1页/共1页</span>
+                    <button class="btn" onclick="changeApplicationPage(1)" id="nextApplicationPage" disabled>下一页</button>
+                </div>
+            </div>
+        </div>
+        <div id="apiPanel" class="panel">
+            <h2>API密钥管理</h2>
+            <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center;">
+                <button class="btn" onclick="showAddApiKeyForm()">添加新API密钥</button>
+                <button class="btn" onclick="loadApiKeysList()">刷新</button>
+            </div>
+            <div id="apiKeysTable" style="margin-bottom: 20px;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #f8f9fa;">
+                            <th style="padding: 10px; border: 1px solid #ddd;">API密钥</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">描述</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">速率限制</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">过期时间</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">状态</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="apiKeysTableBody">
+                        <tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd;">正在加载API密钥...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination Controls -->
+            <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; justify-content: space-between;">
+                <div style="display: flex; gap: 5px; align-items: center;">
+                    <label>每页显示:</label>
+                    <select id="apiPageSize" onchange="loadApiKeysList()">
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="btn" onclick="changeApiPage(-1)" id="prevApiPage" disabled>上一页</button>
+                    <span id="apiPageInfo">第1页/共1页</span>
+                    <button class="btn" onclick="changeApiPage(1)" id="nextApiPage" disabled>下一页</button>
+                </div>
+            </div>
+        </div>
+        <div id="apiDebugPanel" class="panel">
+            <h2>API调试平台</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <div class="form-group">
+                        <label>应用密钥</label>
+                        <select id="debugAppKey"><option value="">请选择应用密钥</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>输入文本</label>
+                        <textarea id="debugInputText" placeholder="请输入要识别的文本..." rows="4"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>API密钥</label>
+                        <input type="text" id="debugApiKey" placeholder="请输入有效的API密钥(生产环境必需)">
+                        <small style="color: #6c757d; display: block; margin-top: 5px;">
+                            注意: 请在上方的API密钥管理标签页创建有效的API密钥
+                        </small>
+                    </div>
+                    <button class="btn" onclick="testApiCall()">测试API调用</button>
+                </div>
+                <div>
+                    <h3>API调用结果</h3>
+                    <div id="apiCallResult" style="background: #f8f9fa; padding: 15px; border-radius: 5px; min-height: 200px;">
+                        <div style="color: #6c757d; text-align: center;">结果将显示在这里</div>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top: 20px;">
+                <h3>API文档</h3>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 5px;">
+                    <h4>意图识别API</h4>
+                    <p><strong>端点:</strong> POST /api/v1/intent/recognize</p>
+                    <p><strong>请求体:</strong></p>
+                    <pre>{
+  "app_key": "your_app_key",
+  "text": "your_input_text"
+}</pre>
+                    <p><strong>请求头:</strong></p>
+                    <pre>X-API-Key: your_api_key (required for production)</pre>
+                    <p style="color: #dc3545; margin-top: 10px;">
+                        <strong>注意:</strong> 此端点需要有效的API密钥。请在API密钥管理标签页中创建。
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Modal Container -->
+    <div id="modalContainer" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">添加新规则</h2>
+            </div>
+            
+            <!-- Add Rule Form -->
+            <div id="addRuleForm" class="hidden active">
+                <div class="form-group">
+                    <label>规则类型</label>
+                    <select id="newRuleType">
+                        <option value="keyword">关键词</option>
+                        <option value="regex">正则表达式</option>
+                        <option value="semantic">语义</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>分类</label>
+                    <select id="newRuleCategory"></select>
+                </div>
+                <div class="form-group">
+                    <label>内容</label>
+                    <textarea id="newRuleContent" placeholder="请输入规则内容..." rows="4"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>权重</label>
+                    <input type="number" id="newRuleWeight" value="1.0" step="0.1">
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="saveNewRule()">保存规则</button>
+                    <button class="btn" onclick="hideAddRuleForm()" style="background: #6c757d;">取消</button>
+                </div>
+                <div id="addRuleResult" class="result hidden"></div>
+            </div>
+            
+            <!-- Edit Rule Form -->
+            <div id="editRuleForm" class="hidden">
+                <input type="hidden" id="editRuleId">
+                <div class="form-group">
+                    <label>规则类型</label>
+                    <select id="editRuleType">
+                        <option value="keyword">关键词</option>
+                        <option value="regex">正则表达式</option>
+                        <option value="semantic">语义</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>分类</label>
+                    <select id="editRuleCategory"></select>
+                </div>
+                <div class="form-group">
+                    <label>内容</label>
+                    <textarea id="editRuleContent" placeholder="请输入规则内容..." rows="4"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>权重</label>
+                    <input type="number" id="editRuleWeight" step="0.1">
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="saveEditRule()">保存更改</button>
+                    <button class="btn" onclick="hideEditRuleForm()" style="background: #6c757d;">取消</button>
+                </div>
+                <div id="editRuleResult" class="result hidden"></div>
+            </div>
+            
+            <!-- Add Category Form -->
+            <div id="addCategoryForm" class="hidden">
+                <div class="form-group">
+                    <label>分类名称</label>
+                    <input type="text" id="newCategoryName" placeholder="请输入分类名称...">
+                </div>
+                <div class="form-group">
+                    <label>分类代码</label>
+                    <input type="text" id="newCategoryCode" placeholder="请输入分类代码...">
+                </div>
+                <div class="form-group">
+                    <label>优先级</label>
+                    <input type="number" id="newCategoryPriority" value="0" step="1">
+                </div>
+                <div class="form-group">
+                    <label>描述</label>
+                    <textarea id="newCategoryDescription" placeholder="请输入分类描述..." rows="3"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="saveNewCategory()">保存分类</button>
+                    <button class="btn" onclick="hideAddCategoryForm()" style="background: #6c757d;">取消</button>
+                </div>
+                <div id="addCategoryResult" class="result hidden"></div>
+            </div>
+            
+            <!-- Edit Category Form -->
+            <div id="editCategoryForm" class="hidden">
+                <input type="hidden" id="editCategoryId">
+                <div class="form-group">
+                    <label>分类名称</label>
+                    <input type="text" id="editCategoryName" placeholder="请输入分类名称...">
+                </div>
+                <div class="form-group">
+                    <label>分类代码</label>
+                    <input type="text" id="editCategoryCode" placeholder="请输入分类代码...">
+                </div>
+                <div class="form-group">
+                    <label>优先级</label>
+                    <input type="number" id="editCategoryPriority" step="1">
+                </div>
+                <div class="form-group">
+                    <label>描述</label>
+                    <textarea id="editCategoryDescription" placeholder="请输入分类描述..." rows="3"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="saveEditCategory()">保存更改</button>
+                    <button class="btn" onclick="hideEditCategoryForm()" style="background: #6c757d;">取消</button>
+                </div>
+                <div id="editCategoryResult" class="result hidden"></div>
+            </div>
+
+            <!-- Add Application Form -->
+            <div id="addApplicationForm" class="hidden">
+                <div class="form-group">
+                    <label>应用密钥</label>
+                    <input type="text" id="newApplicationKey" placeholder="请输入应用密钥...">
+                </div>
+                <div class="form-group">
+                    <label>应用名称</label>
+                    <input type="text" id="newApplicationName" placeholder="请输入应用名称...">
+                </div>
+                <div class="form-group">
+                    <label>应用描述</label>
+                    <input type="text" id="newApplicationDescription" placeholder="请输入应用描述...">
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="saveNewApplication()">保存应用</button>
+                    <button class="btn" onclick="hideAddApplicationForm()" style="background: #6c757d;">取消</button>
+                </div>
+                <div id="addApplicationResult" class="result hidden"></div>
+            </div>
+
+            <!-- Edit Application Form -->
+            <div id="editApplicationForm" class="hidden">
+                <input type="hidden" id="editApplicationId">
+                <div class="form-group">
+                    <label>应用密钥</label>
+                    <input type="text" id="editApplicationKey" disabled style="background: #f8f9fa;">
+                    <small style="color: #6c757d;">应用密钥不可修改</small>
+                </div>
+                <div class="form-group">
+                    <label>应用名称</label>
+                    <input type="text" id="editApplicationName" placeholder="请输入应用名称...">
+                </div>
+                <div class="form-group">
+                    <label>应用描述</label>
+                    <input type="text" id="editApplicationDescription" placeholder="请输入应用描述...">
+                </div>
+                <div class="form-group">
+                    <label>状态</label>
+                    <input type="checkbox" id="editApplicationIsActive"> 激活
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="saveEditApplication()">保存更改</button>
+                    <button class="btn" onclick="hideEditApplicationForm()" style="background: #6c757d;">取消</button>
+                </div>
+                <div id="editApplicationResult" class="result hidden"></div>
+            </div>
+            
+            <!-- Add API Key Form -->
+            <div id="addApiKeyForm" class="hidden">
+                <div class="form-group">
+                    <label>描述</label>
+                    <input type="text" id="newApiKeyDescription" placeholder="请输入API密钥描述...">
+                </div>
+                <div class="form-group">
+                    <label>速率限制(请求/分钟)</label>
+                    <input type="number" id="newApiKeyRateLimit" value="100">
+                </div>
+                <div class="form-group">
+                    <label>过期时间</label>
+                    <input type="datetime-local" id="newApiKeyExpiresAt">
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="saveNewApiKey()">创建API密钥</button>
+                    <button class="btn" onclick="hideAddApiKeyForm()" style="background: #6c757d;">取消</button>
+                </div>
+                <div id="addApiKeyResult" class="result hidden"></div>
+            </div>
+            
+            <!-- Edit API Key Form -->
+            <div id="editApiKeyForm" class="hidden">
+                <input type="hidden" id="editApiKeyId">
+                <div class="form-group">
+                    <label>描述</label>
+                    <input type="text" id="editApiKeyDescription" placeholder="请输入API密钥描述...">
+                </div>
+                <div class="form-group">
+                    <label>速率限制(请求/分钟)</label>
+                    <input type="number" id="editApiKeyRateLimit">
+                </div>
+                <div class="form-group">
+                    <label>过期时间</label>
+                    <input type="datetime-local" id="editApiKeyExpiresAt">
+                </div>
+                <div class="form-group">
+                    <label>状态</label>
+                    <input type="checkbox" id="editApiKeyIsActive"> 活跃
+                </div>
+                <div class="modal-footer">
+                    <button class="btn" onclick="saveEditApiKey()">保存更改</button>
+                    <button class="btn" onclick="hideEditApiKeyForm()" style="background: #6c757d;">取消</button>
+                </div>
+                <div id="editApiKeyResult" class="result hidden"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+        const API_PREFIX = '/api/v1';
+        const UI_PREFIX = '/api/ui';
+        let categories = [];
+        let currentPage = 1;
+        let totalPages = 1;
+        let currentCategoryPage = 1;
+        let appsLoaded = false;
+        let defaultApiKey = null;
+        let totalCategoryPages = 1;
+        let currentApplicationPage = 1;
+        let totalApplicationPages = 1;
+        let currentAppConfigPage = 1;
+        let totalAppConfigPages = 1;
+        let currentApiPage = 1;
+        let totalApiPages = 1;
+        let currentLogPage = 1;
+        let totalLogPages = 1;
+        let applications = [];
+        let apps = [];
+        let apiKeys = [];
+        let applicationMap = {};
+        
+        function showPanel(name, event) {
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById(name + 'Panel').classList.add('active');
+            event.target.classList.add('active');
+            if (name === 'monitor') loadStats();
+            if (name === 'rules') loadRules();
+            if (name === 'categories') loadCategoriesList();
+            if (name === 'apps') loadAppsList();
+            if (name === 'api') loadApiKeysList();
+            if (name === 'apiDebug') loadAppOptions();
+        }
+        
+        async function testApiCall() {
+            const appKey = document.getElementById('debugAppKey').value;
+            const text = document.getElementById('debugInputText').value;
+            const apiKey = document.getElementById('debugApiKey').value;
+            const resultDiv = document.getElementById('apiCallResult');
+            
+            if (!appKey || !text) {
+                resultDiv.innerHTML = '<div style="color: #dc3545;">错误: 应用密钥和输入文本为必填项</div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<div style="color: #6c757d;">正在发送API调用...</div>';
+            
+            try {
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                
+                if (apiKey) {
+                    headers['X-API-Key'] = apiKey;
+                }
+                
+                const response = await fetch(`${API_PREFIX}/intent/recognize`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({
+                        app_key: appKey,
+                        text: text
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    let errorMessage = `HTTP error! status: ${response.status}`;
+                    try {
+                        const errorData = JSON.parse(errorText);
+                        errorMessage = errorData.detail || errorMessage;
+                    } catch (e) {
+                        errorMessage = errorText || errorMessage;
+                    }
+                    throw new Error(errorMessage);
+                }
+                
+                const data = await response.json();
+                
+                resultDiv.innerHTML = `
+                    <div style="color: #28a745;"><strong>成功!</strong></div>
+                    <pre style="white-space: pre-wrap; margin-top: 10px;">${JSON.stringify(data, null, 2)}</pre>
+                `;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div style="color: #dc3545;"><strong>错误:</strong> ${error.message}</div>
+                `;
+            }
+        }
+        
+        async function testIntent() {
+            const appKey = document.getElementById('appKey').value;
+            const text = document.getElementById('inputText').value;
+            const resultDiv = document.getElementById('testResult');
+
+            console.log('testIntent called - appsLoaded:', appsLoaded, 'appKey:', appKey, 'text:', text);
+
+            if (!appsLoaded) {
+                resultDiv.className = 'result loading';
+                resultDiv.innerHTML = '<div class="loading">应用正在加载中,请稍候...</div>';
+                return;
+            }
+
+            if (!appKey || appKey === null || appKey === undefined || appKey.toString().trim() === '') {
+                console.error('Invalid appKey:', appKey);
+                alert('请从下拉菜单选择应用密钥');
+                return;
+            }
+            if (appKey === '请选择应用密钥') {
+                console.error('App key is placeholder');
+                alert('请从下拉菜单选择有效的应用密钥');
+                return;
+            }
+            if (!text || text === null || text === undefined || text.toString().trim() === '') {
+                console.error('Empty text');
+                alert('请输入文本');
+                return;
+            }
+
+            resultDiv.className = 'result loading';
+            resultDiv.innerHTML = '<div class="loading">识别中...</div>';
+
+            try {
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+
+                const response = await fetch(`${API_PREFIX}/intent/recognize`, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify({ app_key: appKey, text: text })
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.className = 'result success';
+
+                    let chainHtml = '';
+                    if (data.recognition_chain && data.recognition_chain.length > 0) {
+                        chainHtml = '<div style="margin-top: 15px;"><h4>识别链:</h4><ul style="margin-left: 20px;">';
+                        data.recognition_chain.forEach((step, index) => {
+                            let statusClass = '';
+                            let statusText = '';
+                            switch (step.status) {
+                                case 'success':
+                                    statusClass = 'style="color: #28a745;"';
+                                    statusText = '✓ 成功';
+                                    break;
+                                case 'no_match':
+                                    statusClass = 'style="color: #ffc107;"';
+                                    statusText = '⟳ 未匹配';
+                                    break;
+                                case 'error':
+                                    statusClass = 'style="color: #dc3545;"';
+                                    statusText = '✗ 错误';
+                                    break;
+                                case 'skipped':
+                                    statusClass = 'style="color: #6c757d;"';
+                                    statusText = '↗ 跳过';
+                                    break;
+                            }
+                            chainHtml += `<li ${statusClass}>${index + 1}. ${step.recognizer} - ${statusText} (${step.time_ms?.toFixed(2) || 0}ms)`;
+                            if (step.intent) {
+                                chainHtml += ` - 意图: ${step.intent} (${(step.confidence * 100).toFixed(1)}%)`;
+                            }
+                            chainHtml += '</li>';
+                        });
+                        chainHtml += '</ul></div>';
+                    }
+
+                    resultDiv.innerHTML = `
+                        <h3>成功</h3>
+                        <p><strong>意图:</strong> <span class="code">${data.intent}</span></p>
+                        <p><strong>置信度:</strong> ${(data.confidence * 100).toFixed(1)}%</p>
+                        <p><strong>处理时间:</strong> ${data.processing_time_ms.toFixed(2)}ms</p>
+                        <p><strong>来自缓存:</strong> ${data.cached ? '是' : '否'}</p>
+                        ${data.entities && Object.keys(data.entities).length > 0 ?
+                            '<div style="margin-top: 15px;"><h4>实体:</h4><ul style="margin-left: 20px;">' +
+                            Object.entries(data.entities).map(([key, value]) => `<li>${key}: ${value}</li>`).join('') +
+                            '</ul></div>' : ''
+                        }
+                        ${data.matched_rules && data.matched_rules.length > 0 ?
+                            '<div style="margin-top: 15px;"><h4>匹配的规则:</h4><ul style="margin-left: 20px;">' +
+                            data.matched_rules.map(rule => `<li>${rule.rule_type}: ${rule.content} (权重: ${rule.weight})</li>`).join('') +
+                            '</ul></div>' : ''
+                        }
+                        ${chainHtml}
+                    `;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.innerHTML = `<h3>失败</h3><p>${response.statusText}</p>`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `<h3>错误</h3><p>${error.message}</p>`;
+            }
+        }
+        
+        async function loadStats() {
+            // Reset basic stats
+            document.getElementById('statCategories').textContent = '-';
+            document.getElementById('statRules').textContent = '-';
+            document.getElementById('statApps').textContent = '-';
+            document.getElementById('statCache').textContent = '-';
+
+            document.getElementById('statRecognitionTotal').textContent = '-';
+            document.getElementById('statRecognitionSuccessRate').textContent = '-';
+            document.getElementById('statRecognitionFailureRate').textContent = '-';
+            document.getElementById('statRecognitionAvgTime').textContent = '-';
+            document.getElementById('topIntentsList').innerHTML = '<div style="text-align: center; color: #6c757d;">正在加载热门意图...</div>';
+            document.getElementById('logsTableBody').innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center; border: 1px solid #dee2e6; color: #6c757d;">正在加载日志...</td></tr>';
+            
+            try {
+                const response = await fetch(UI_PREFIX + '/stats');
+                const stats = await response.json();
+                
+                // Update basic stats
+                document.getElementById('statCategories').textContent = stats.categories.total || 0;
+                document.getElementById('statRules').textContent = stats.rules.total || 0;
+                document.getElementById('statApps').textContent = stats.apps.total || 0;
+                const cacheStatus = stats.cache.connected ? '已连接' : '未连接';
+                document.getElementById('statCache').textContent = cacheStatus;
+                document.getElementById('statCache').style.color = stats.cache.connected ? '#28a745' : '#dc3545';
+                
+                if (stats.recognition) {
+                    document.getElementById('statRecognitionTotal').textContent = stats.recognition.total_count || 0;
+                    document.getElementById('statRecognitionSuccessRate').textContent = (stats.recognition.success_rate || 0).toFixed(1) + '%';
+                    document.getElementById('statRecognitionFailureRate').textContent = (stats.recognition.failure_rate || 0).toFixed(1) + '%';
+                    document.getElementById('statRecognitionAvgTime').textContent = (stats.recognition.average_processing_time_ms || 0).toFixed(2) + 'ms';
+                    
+                    // Update top intents
+                    if (stats.recognition.top_intents && stats.recognition.top_intents.length > 0) {
+                        let topIntentsHtml = '<table style="width: 100%; border-collapse: collapse;"><thead><tr style="background: #e9ecef;"><th style="padding: 8px; border: 1px solid #dee2e6; text-align: left;">意图</th><th style="padding: 8px; border: 1px solid #dee2e6; text-align: right;">数量</th></tr></thead><tbody>';
+                        stats.recognition.top_intents.forEach(item => {
+                            topIntentsHtml += `<tr><td style="padding: 8px; border: 1px solid #dee2e6;">${item.intent}</td><td style="padding: 8px; border: 1px solid #dee2e6; text-align: right;">${item.count}</td></tr>`;
+                        });
+                        topIntentsHtml += '</tbody></table>';
+                        document.getElementById('topIntentsList').innerHTML = topIntentsHtml;
+                    } else {
+                        document.getElementById('topIntentsList').innerHTML = '<div style="text-align: center; color: #6c757d;">暂无数据</div>';
+                    }
+                }
+                
+                // Load logs
+                await loadLogs();
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+                document.getElementById('topIntentsList').innerHTML = '<div style="text-align: center; color: #dc3545;">加载统计信息失败</div>';
+                document.getElementById('logsTableBody').innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center; border: 1px solid #dee2e6; color: #dc3545;">加载日志失败</td></tr>';
+            }
+        }
+        
+        async function loadCategories() {
+            try {
+                // 调用后端 API 获取分类列表
+                const response = await fetch(UI_PREFIX + '/categories');
+                if (!response.ok) {
+                    throw new Error('加载分类失败');
+                }
+                const data = await response.json();
+                categories = data.items || [];
+                
+                // 填充分类选择框
+                const categoryFilter = document.getElementById('categoryFilter');
+                const newRuleCategory = document.getElementById('newRuleCategory');
+                const editRuleCategory = document.getElementById('editRuleCategory');
+                
+                // 清空现有选项
+                while (categoryFilter.options.length > 1) {
+                    categoryFilter.remove(1);
+                }
+                
+                newRuleCategory.innerHTML = '';
+                editRuleCategory.innerHTML = '';
+                
+                // 添加新选项
+                categories.forEach(category => {
+                    const option1 = document.createElement('option');
+                    option1.value = category.id;
+                    option1.textContent = `${category.name} (${category.code})`;
+                    categoryFilter.appendChild(option1);
+                    
+                    const option2 = document.createElement('option');
+                    option2.value = category.id;
+                    option2.textContent = `${category.name} (${category.code})`;
+                    newRuleCategory.appendChild(option2);
+                    
+                    const option3 = document.createElement('option');
+                    option3.value = category.id;
+                    option3.textContent = `${category.name} (${category.code})`;
+                    editRuleCategory.appendChild(option3);
+                });
+            } catch (error) {
+                console.error('加载分类失败:', error);
+            }
+        }
+        
+        async function loadLogs() {
+            const logsTableBody = document.getElementById('logsTableBody');
+            try {
+                const response = await fetch(`${UI_PREFIX}/logs?page=${currentLogPage}&page_size=20`);
+                if (!response.ok) {
+                    throw new Error('加载日志失败');
+                }
+                const result = await response.json();
+                const logs = result.data || [];
+
+                if (logs.length === 0) {
+                    logsTableBody.innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center; border: 1px solid #dee2e6; color: #6c757d;">暂无日志</td></tr>';
+                } else {
+                    logsTableBody.innerHTML = '';
+                    logs.forEach(log => {
+                        const row = document.createElement('tr');
+                        const statusClass = log.is_success ? 'style="color: #28a745; font-weight: bold;"' : 'style="color: #dc3545; font-weight: bold;"';
+                        const statusText = log.is_success ? '成功' : '失败';
+                        row.innerHTML = `
+                            <td style="padding: 8px; border: 1px solid #dee2e6;">${new Date(log.created_at).toLocaleString()}</td>
+                            <td style="padding: 8px; border: 1px solid #dee2e6;">${log.app_key}</td>
+                            <td style="padding: 8px; border: 1px solid #dee2e6;">${log.input_text}</td>
+                            <td style="padding: 8px; border: 1px solid #dee2e6;">${log.recognized_intent || '-'}</td>
+                            <td style="padding: 8px; border: 1px solid #dee2e6; text-align: right;">${log.confidence ? (log.confidence * 100).toFixed(1) + '%' : '-'}</td>
+                            <td style="padding: 8px; border: 1px solid #dee2e6; text-align: right;">${log.processing_time_ms || 0}</td>
+                            <td style="padding: 8px; border: 1px solid #dee2e6; text-align: center;"><span ${statusClass}>${statusText}</span></td>
+                        `;
+                        logsTableBody.appendChild(row);
+                    });
+                }
+
+                totalLogPages = result.total_pages || 1;
+                document.getElementById('prevLogPage').disabled = currentLogPage === 1;
+                document.getElementById('nextLogPage').disabled = currentLogPage === totalLogPages || totalLogPages === 0;
+                document.getElementById('logPageInfo').textContent = `第${currentLogPage}页/共${totalLogPages}页`;
+            } catch (error) {
+                console.error('加载日志失败:', error);
+                logsTableBody.innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center; border: 1px solid #dee2e6; color: #dc3545;">加载日志失败</td></tr>';
+            }
+        }
+        
+        function changeLogPage(direction) {
+            const newPage = currentLogPage + direction;
+            if (newPage >= 1 && newPage <= totalLogPages) {
+                currentLogPage = newPage;
+                loadLogs();
+            }
+        }
+        
+        async function loadRules() {
+            const ruleTypeFilter = document.getElementById('ruleTypeFilter').value;
+            const categoryFilter = document.getElementById('categoryFilter').value;
+            const pageSize = document.getElementById('pageSize').value;
+            const tableBody = document.getElementById('rulesTableBody');
+            
+            tableBody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd;">正在加载规则...</td></tr>';
+            
+            try {
+                // 构建查询参数
+                let queryParams = [];
+                if (ruleTypeFilter !== 'all') {
+                    queryParams.push(`rule_type=${ruleTypeFilter}`);
+                }
+                if (categoryFilter !== 'all') {
+                    queryParams.push(`category_id=${categoryFilter}`);
+                }
+                queryParams.push(`page=${currentPage}`);
+                queryParams.push(`page_size=${pageSize}`);
+                
+                const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
+                
+                // 调用后端 API 获取规则列表
+                const response = await fetch(UI_PREFIX + '/rules' + queryString);
+                if (!response.ok) {
+                    throw new Error('加载规则失败');
+                }
+                const data = await response.json();
+                const rules = data.items || [];
+                totalPages = data.total_pages || 1;
+                
+                // 更新分页信息
+                document.getElementById('pageInfo').textContent = `第${currentPage}页/共${totalPages}页`;
+                document.getElementById('prevPage').disabled = currentPage === 1;
+                document.getElementById('nextPage').disabled = currentPage === totalPages;
+                
+                // 填充表格
+                tableBody.innerHTML = '';
+                if (rules.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd;">未找到规则</td></tr>';
+                } else {
+                    rules.forEach(rule => {
+                        const category = categories.find(c => c.id === rule.category_id) || { name: '未知', code: 'unknown' };
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td style="padding: 10px; border: 1px solid #ddd;">${rule.id}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${rule.rule_type}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${rule.content}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${category.name} (${category.code})</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${rule.weight}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">
+                                <button class="btn" style="padding: 5px 10px; font-size: 12px;" onclick="editRule(${rule.id})">编辑</button>
+                                <button class="btn" style="padding: 5px 10px; font-size: 12px; background: #dc3545;" onclick="deleteRule(${rule.id})">删除</button>
+                            </td>
+                        `;
+                        tableBody.appendChild(row);
+                    });
+                }
+            } catch (error) {
+                console.error('加载规则失败:', error);
+                tableBody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd; color: #dc3545;">加载规则失败</td></tr>';
+            }
+        }
+        
+        function changePage(direction) {
+            const newPage = currentPage + direction;
+            if (newPage >= 1 && newPage <= totalPages) {
+                currentPage = newPage;
+                loadRules();
+            }
+        }
+        
+        async function loadCategoriesList() {
+            const pageSize = document.getElementById('categoryPageSize').value;
+            const tableBody = document.getElementById('categoriesTableBody');
+            const applicationFilter = document.getElementById('categoryApplicationFilter');
+            const applicationId = applicationFilter.value;
+            
+            tableBody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd;">正在加载分类...</td></tr>';
+            
+            try {
+                // 填充应用筛选下拉框
+                if (Object.keys(applicationMap).length === 0) {
+                    const appsResponse = await fetch(UI_PREFIX + '/applications');
+                    if (appsResponse.ok) {
+                        const appsData = await appsResponse.json();
+                        const appsList = appsData.items || [];
+                        
+                        appsList.forEach(app => {
+                            applicationMap[app.id] = app;
+                        });
+                        
+                        applicationFilter.innerHTML = '<option value="">所有应用</option>';
+                        appsList.forEach(app => {
+                            const option = document.createElement('option');
+                            option.value = app.id;
+                            option.textContent = `${app.name} (${app.app_key})`;
+                            applicationFilter.appendChild(option);
+                        });
+                    }
+                }
+                
+                // 构建查询参数
+                let queryParams = [];
+                queryParams.push(`page=${currentCategoryPage}`);
+                queryParams.push(`page_size=${pageSize}`);
+                
+                if (applicationId && applicationId !== '') {
+                    queryParams.push(`application_id=${applicationId}`);
+                }
+                
+                const queryString = `?${queryParams.join('&')}`;
+                
+                // 调用后端 API 获取分类列表
+                const response = await fetch(UI_PREFIX + '/categories' + queryString);
+                if (!response.ok) {
+                    throw new Error('加载分类失败');
+                }
+                const data = await response.json();
+                const categoriesList = data.items || [];
+                totalCategoryPages = data.total_pages || 1;
+                
+                // 更新分页信息
+                document.getElementById('categoryPageInfo').textContent = `第${currentCategoryPage}页/共${totalCategoryPages}页`;
+                document.getElementById('prevCategoryPage').disabled = currentCategoryPage === 1;
+                document.getElementById('nextCategoryPage').disabled = currentCategoryPage === totalCategoryPages;
+                
+                // 填充表格
+                tableBody.innerHTML = '';
+                if (categoriesList.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd;">未找到分类</td></tr>';
+                } else {
+                    categoriesList.forEach(category => {
+                        const app = applicationMap[category.application_id] || { name: '未知', app_key: 'unknown' };
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td style="padding: 10px; border: 1px solid #ddd;">${category.id}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${app.name} (${app.app_key})</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${category.name}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${category.code}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${category.description || '-'}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">
+                                <button class="btn" style="padding: 5px 10px; font-size: 12px;" onclick="editCategory(${category.id})">编辑</button>
+                                <button class="btn" style="padding: 5px 10px; font-size: 12px; background: #dc3545;" onclick="deleteCategory(${category.id})">删除</button>
+                            </td>
+                        `;
+                        tableBody.appendChild(row);
+                    });
+                }
+            } catch (error) {
+                console.error('加载分类失败:', error);
+                tableBody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd; color: #dc3545;">加载分类失败</td></tr>';
+            }
+        }
+        
+        function changeCategoryPage(direction) {
+            const newPage = currentCategoryPage + direction;
+            if (newPage >= 1 && newPage <= totalCategoryPages) {
+                currentCategoryPage = newPage;
+                loadCategoriesList();
+            }
+        }
+        
+        function closeModal() {
+            const modal = document.getElementById('modalContainer');
+            modal.classList.add('hidden');
+
+            // Hide all forms
+            document.getElementById('addRuleForm').classList.remove('active');
+            document.getElementById('editRuleForm').classList.remove('active');
+            document.getElementById('addCategoryForm').classList.remove('active');
+            document.getElementById('editCategoryForm').classList.remove('active');
+            document.getElementById('addApplicationForm').classList.remove('active');
+            document.getElementById('editApplicationForm').classList.remove('active');
+            document.getElementById('addApiKeyForm').classList.remove('active');
+            document.getElementById('editApiKeyForm').classList.remove('active');
+        }
+        
+        async function editRule(ruleId) {
+            try {
+                const url = UI_PREFIX + `/rules/${ruleId}`;
+                console.log('获取规则详情:', ruleId, 'URL:', url);
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    console.error('加载规则详情失败 - 状态码:', response.status);
+                    const errorText = await response.text();
+                    console.error('错误响应:', errorText);
+                    throw new Error('加载规则详情失败');
+                }
+                const rule = await response.json();
+                console.log('规则详情:', rule);
+
+                // 填充编辑表单
+                document.getElementById('editRuleId').value = rule.id;
+                document.getElementById('editRuleType').value = rule.rule_type;
+                document.getElementById('editRuleCategory').value = rule.category_id;
+                document.getElementById('editRuleContent').value = rule.content;
+                document.getElementById('editRuleWeight').value = rule.weight;
+
+                // 显示编辑弹窗
+                showEditRuleForm();
+            } catch (error) {
+                console.error('加载规则详情失败:', error);
+                alert(`加载规则详情失败: ${error.message}`);
+            }
+        }
+        
+        async function saveEditRule() {
+            const id = document.getElementById('editRuleId').value;
+            const ruleType = document.getElementById('editRuleType').value;
+            const categoryId = document.getElementById('editRuleCategory').value;
+            const content = document.getElementById('editRuleContent').value;
+            const weight = document.getElementById('editRuleWeight').value;
+            const resultDiv = document.getElementById('editRuleResult');
+            
+            resultDiv.className = 'result loading';
+            resultDiv.innerHTML = '<div class="loading">正在保存规则...</div>';
+            
+            try {
+                // 调用后端 API 更新规则
+                const response = await fetch(UI_PREFIX + `/rules/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        rule_type: ruleType, 
+                        category_id: parseInt(categoryId),
+                        content: content,
+                        weight: parseFloat(weight)
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || '更新规则失败');
+                }
+                
+                resultDiv.className = 'result success';
+                resultDiv.innerHTML = '<h3>成功</h3><p>规则更新成功</p>';
+                
+                // 刷新规则列表
+                setTimeout(() => {
+                    loadRules();
+                    hideEditRuleForm();
+                }, 1500);
+            } catch (error) {
+                console.error('更新规则失败:', error);
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `<h3>错误</h3><p>${error.message || '更新规则失败'}</p>`;
+            }
+        }
+        
+        async function saveNewRule() {
+            const ruleType = document.getElementById('newRuleType').value;
+            const categoryId = document.getElementById('newRuleCategory').value;
+            const content = document.getElementById('newRuleContent').value;
+            const weight = document.getElementById('newRuleWeight').value;
+            const resultDiv = document.getElementById('addRuleResult');
+            
+            if (!content.trim()) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = '<h3>错误</h3><p>规则内容不能为空</p>';
+                return;
+            }
+            
+            if (!categoryId) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = '<h3>错误</h3><p>请选择分类</p>';
+                return;
+            }
+            
+            resultDiv.className = 'result loading';
+            resultDiv.innerHTML = '<div class="loading">正在保存规则...</div>';
+            
+            try {
+                const response = await fetch(UI_PREFIX + '/rules', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        rule_type: ruleType, 
+                        category_id: parseInt(categoryId),
+                        content: content,
+                        weight: parseFloat(weight)
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || '创建规则失败');
+                }
+                
+                resultDiv.className = 'result success';
+                resultDiv.innerHTML = '<h3>成功</h3><p>规则创建成功</p>';
+                
+                setTimeout(() => {
+                    loadRules();
+                    hideAddRuleForm();
+                }, 1500);
+            } catch (error) {
+                console.error('创建规则失败:', error);
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `<h3>错误</h3><p>${error.message || '创建规则失败'}</p>`;
+            }
+        }
+        
+        function showEditRuleForm() {
+            const modal = document.getElementById('modalContainer');
+            const form = document.getElementById('editRuleForm');
+
+            // Update modal title
+            document.getElementById('modalTitle').textContent = '编辑规则';
+
+            // Show modal
+            modal.classList.remove('hidden');
+
+            // Hide all forms
+            document.getElementById('addRuleForm').classList.add('hidden');
+            document.getElementById('addRuleForm').classList.remove('active');
+            document.getElementById('editRuleForm').classList.add('hidden');
+            document.getElementById('editRuleForm').classList.remove('active');
+            document.getElementById('addCategoryForm').classList.add('hidden');
+            document.getElementById('addCategoryForm').classList.remove('active');
+            document.getElementById('editCategoryForm').classList.add('hidden');
+            document.getElementById('editCategoryForm').classList.remove('active');
+            document.getElementById('addApplicationForm').classList.add('hidden');
+            document.getElementById('addApplicationForm').classList.remove('active');
+            document.getElementById('addApiKeyForm').classList.add('hidden');
+            document.getElementById('addApiKeyForm').classList.remove('active');
+            document.getElementById('editApiKeyForm').classList.add('hidden');
+            document.getElementById('editApiKeyForm').classList.remove('active');
+
+            // Show edit rule form
+            form.classList.remove('hidden');
+            form.classList.add('active');
+        }
+        
+        function hideEditRuleForm() {
+            closeModal();
+            document.getElementById('editRuleResult').classList.add('hidden');
+        }
+        
+        function showAddRuleForm() {
+            const modal = document.getElementById('modalContainer');
+            const form = document.getElementById('addRuleForm');
+
+            // Update modal title
+            document.getElementById('modalTitle').textContent = '添加新规则';
+
+            // Show modal
+            modal.classList.remove('hidden');
+
+            // Hide all forms
+            document.getElementById('addRuleForm').classList.add('hidden');
+            document.getElementById('addRuleForm').classList.remove('active');
+            document.getElementById('editRuleForm').classList.add('hidden');
+            document.getElementById('editRuleForm').classList.remove('active');
+            document.getElementById('addCategoryForm').classList.add('hidden');
+            document.getElementById('addCategoryForm').classList.remove('active');
+            document.getElementById('editCategoryForm').classList.add('hidden');
+            document.getElementById('editCategoryForm').classList.remove('active');
+            document.getElementById('addApplicationForm').classList.add('hidden');
+            document.getElementById('addApplicationForm').classList.remove('active');
+            document.getElementById('addApiKeyForm').classList.add('hidden');
+            document.getElementById('addApiKeyForm').classList.remove('active');
+            document.getElementById('editApiKeyForm').classList.add('hidden');
+            document.getElementById('editApiKeyForm').classList.remove('active');
+
+            // Show add rule form
+            form.classList.remove('hidden');
+            form.classList.add('active');
+        }
+        
+        function hideAddRuleForm() {
+            closeModal();
+            document.getElementById('addRuleResult').classList.add('hidden');
+            // 重置表单
+            document.getElementById('newRuleType').value = 'keyword';
+            document.getElementById('newRuleContent').value = '';
+            document.getElementById('newRuleWeight').value = '1.0';
+        }
+        
+        function showAddCategoryForm() {
+            const modal = document.getElementById('modalContainer');
+            const form = document.getElementById('addCategoryForm');
+
+            // Update modal title
+            document.getElementById('modalTitle').textContent = '添加新分类';
+
+            // Show modal
+            modal.classList.remove('hidden');
+
+            // Hide all forms
+            document.getElementById('addRuleForm').classList.add('hidden');
+            document.getElementById('addRuleForm').classList.remove('active');
+            document.getElementById('editRuleForm').classList.add('hidden');
+            document.getElementById('editRuleForm').classList.remove('active');
+            document.getElementById('editCategoryForm').classList.add('hidden');
+            document.getElementById('editCategoryForm').classList.remove('active');
+            document.getElementById('addApplicationForm').classList.add('hidden');
+            document.getElementById('addApplicationForm').classList.remove('active');
+            document.getElementById('addApiKeyForm').classList.add('hidden');
+            document.getElementById('addApiKeyForm').classList.remove('active');
+            document.getElementById('editApiKeyForm').classList.add('hidden');
+            document.getElementById('editApiKeyForm').classList.remove('active');
+
+            // Show add category form
+            form.classList.remove('hidden');
+            form.classList.add('active');
+        }
+        
+        function hideAddCategoryForm() {
+            closeModal();
+            document.getElementById('addCategoryResult').classList.add('hidden');
+            // 重置表单
+            document.getElementById('newCategoryName').value = '';
+            document.getElementById('newCategoryCode').value = '';
+            document.getElementById('newCategoryDescription').value = '';
+        }
+        
+        function showEditCategoryForm() {
+            const modal = document.getElementById('modalContainer');
+            const form = document.getElementById('editCategoryForm');
+
+            // Update modal title
+            document.getElementById('modalTitle').textContent = '编辑分类';
+
+            // Show modal
+            modal.classList.remove('hidden');
+
+            // Hide all forms
+            document.getElementById('addRuleForm').classList.add('hidden');
+            document.getElementById('addRuleForm').classList.remove('active');
+            document.getElementById('editRuleForm').classList.add('hidden');
+            document.getElementById('editRuleForm').classList.remove('active');
+            document.getElementById('addCategoryForm').classList.add('hidden');
+            document.getElementById('addCategoryForm').classList.remove('active');
+            document.getElementById('editCategoryForm').classList.add('hidden');
+            document.getElementById('editCategoryForm').classList.remove('active');
+            document.getElementById('addApplicationForm').classList.add('hidden');
+            document.getElementById('addApplicationForm').classList.remove('active');
+            document.getElementById('addApiKeyForm').classList.add('hidden');
+            document.getElementById('addApiKeyForm').classList.remove('active');
+            document.getElementById('editApiKeyForm').classList.add('hidden');
+            document.getElementById('editApiKeyForm').classList.remove('active');
+
+            // Show edit category form
+            form.classList.remove('hidden');
+            form.classList.add('active');
+        }
+        
+        function hideEditCategoryForm() {
+            closeModal();
+            document.getElementById('editCategoryResult').classList.add('hidden');
+        }
+        
+        async function editCategory(categoryId) {
+            try {
+                const url = UI_PREFIX + `/categories/${categoryId}`;
+                console.log('获取分类详情:', categoryId, 'URL:', url);
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    console.error('加载分类详情失败 - 状态码:', response.status);
+                    const errorText = await response.text();
+                    console.error('错误响应:', errorText);
+                    throw new Error('加载分类详情失败');
+                }
+                const category = await response.json();
+                console.log('分类详情:', category);
+
+                // 填充编辑表单
+                document.getElementById('editCategoryId').value = category.id;
+                document.getElementById('editCategoryName').value = category.name;
+                document.getElementById('editCategoryCode').value = category.code;
+                document.getElementById('editCategoryDescription').value = category.description || '';
+                document.getElementById('editCategoryPriority').value = category.priority || 0;
+
+                // 显示编辑弹窗
+                showEditCategoryForm();
+            } catch (error) {
+                console.error('加载分类详情失败:', error);
+                alert(`加载分类详情失败: ${error.message}`);
+            }
+        }
+        
+        async function saveNewCategory() {
+            const applicationFilter = document.getElementById('categoryApplicationFilter');
+            const application_id = applicationFilter.value ? parseInt(applicationFilter.value) : null;
+            const name = document.getElementById('newCategoryName').value;
+            const code = document.getElementById('newCategoryCode').value;
+            const description = document.getElementById('newCategoryDescription').value;
+            const priority = document.getElementById('newCategoryPriority')?.value || 0;
+            const resultDiv = document.getElementById('addCategoryResult');
+            
+            if (!name.trim() || !code.trim()) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = '<h3>错误</h3><p>名称和代码为必填项</p>';
+                return;
+            }
+            
+            if (!application_id) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = '<h3>错误</h3><p>请先选择应用</p>';
+                return;
+            }
+            
+            resultDiv.className = 'result loading';
+            resultDiv.innerHTML = '<div class="loading">正在保存分类...</div>';
+            
+            try {
+                const response = await fetch(UI_PREFIX + '/categories', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        application_id: application_id,
+                        code: code, 
+                        name: name, 
+                        description: description,
+                        priority: parseInt(priority)
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || '保存分类失败');
+                }
+                
+                resultDiv.className = 'result success';
+                resultDiv.innerHTML = '<h3>成功</h3><p>分类保存成功</p>';
+                
+                setTimeout(() => {
+                    loadCategories();
+                    loadCategoriesList();
+                    hideAddCategoryForm();
+                }, 1500);
+            } catch (error) {
+                console.error('保存分类失败:', error);
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `<h3>错误</h3><p>${error.message || '保存分类失败'}</p>`;
+            }
+        }
+        
+        async function saveEditCategory() {
+            const id = document.getElementById('editCategoryId').value;
+            const name = document.getElementById('editCategoryName').value;
+            const code = document.getElementById('editCategoryCode').value;
+            const description = document.getElementById('editCategoryDescription').value;
+            const priority = document.getElementById('editCategoryPriority')?.value || 0;
+            const resultDiv = document.getElementById('editCategoryResult');
+
+            if (!name.trim() || !code.trim()) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = '<h3>错误</h3><p>名称和代码为必填项</p>';
+                return;
+            }
+
+            resultDiv.className = 'result loading';
+            resultDiv.innerHTML = '<div class="loading">正在保存分类...</div>';
+
+            try {
+                const response = await fetch(UI_PREFIX + `/categories/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name, code: code, description: description, priority: parseInt(priority) })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || '更新分类失败');
+                }
+
+                resultDiv.className = 'result success';
+                resultDiv.innerHTML = '<h3>成功</h3><p>分类更新成功</p>';
+
+                setTimeout(() => {
+                    loadCategories();
+                    loadCategoriesList();
+                    hideEditCategoryForm();
+                }, 1500);
+            } catch (error) {
+                console.error('更新分类失败:', error);
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `<h3>错误</h3><p>${error.message || '更新分类失败'}</p>`;
+            }
+        }
+
+        function showAddApplicationForm() {
+            const modal = document.getElementById('modalContainer');
+            const form = document.getElementById('addApplicationForm');
+
+            document.getElementById('modalTitle').textContent = '添加新应用';
+
+            modal.classList.remove('hidden');
+
+            document.getElementById('addRuleForm').classList.add('hidden');
+            document.getElementById('addRuleForm').classList.remove('active');
+            document.getElementById('editRuleForm').classList.add('hidden');
+            document.getElementById('editRuleForm').classList.remove('active');
+            document.getElementById('addCategoryForm').classList.add('hidden');
+            document.getElementById('addCategoryForm').classList.remove('active');
+            document.getElementById('editCategoryForm').classList.add('hidden');
+            document.getElementById('editCategoryForm').classList.remove('active');
+            document.getElementById('editApiKeyForm').classList.add('hidden');
+            document.getElementById('editApiKeyForm').classList.remove('active');
+            document.getElementById('addApplicationForm').classList.add('hidden');
+            document.getElementById('addApplicationForm').classList.remove('active');
+
+            form.classList.remove('hidden');
+            form.classList.add('active');
+        }
+
+        function hideAddApplicationForm() {
+            closeModal();
+            document.getElementById('addApplicationResult').classList.add('hidden');
+            document.getElementById('newApplicationKey').value = '';
+            document.getElementById('newApplicationName').value = '';
+            document.getElementById('newApplicationDescription').value = '';
+        }
+
+        async function saveNewApplication() {
+            const appKey = document.getElementById('newApplicationKey').value;
+            const name = document.getElementById('newApplicationName').value;
+            const description = document.getElementById('newApplicationDescription').value;
+            const resultDiv = document.getElementById('addApplicationResult');
+
+            if (!appKey.trim() || !name.trim()) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = '<h3>错误</h3><p>应用密钥和名称为必填项</p>';
+                return;
+            }
+
+            resultDiv.className = 'result loading';
+            resultDiv.innerHTML = '<div class="loading">正在保存应用...</div>';
+
+            try {
+                const response = await fetch(UI_PREFIX + '/applications', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        app_key: appKey,
+                        name: name,
+                        description: description
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || '保存应用失败');
+                }
+
+                resultDiv.className = 'result success';
+                resultDiv.innerHTML = '<h3>成功</h3><p>应用保存成功</p>';
+
+                setTimeout(() => {
+                    loadApplicationsList();
+                    hideAddApplicationForm();
+                }, 1500);
+            } catch (error) {
+                console.error('保存应用失败:', error);
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `<h3>错误</h3><p>${error.message || '保存应用失败'}</p>`;
+            }
+        }
+
+        async function editApplication(applicationId) {
+            try {
+                const response = await fetch(UI_PREFIX + `/applications/${applicationId}`);
+                if (!response.ok) {
+                    throw new Error('获取应用信息失败');
+                }
+                const app = await response.json();
+                
+                document.getElementById('editApplicationId').value = app.id;
+                document.getElementById('editApplicationKey').value = app.app_key;
+                document.getElementById('editApplicationName').value = app.name || '';
+                document.getElementById('editApplicationDescription').value = app.description || '';
+                document.getElementById('editApplicationIsActive').checked = app.is_active;
+                
+                document.getElementById('editApplicationResult').classList.add('hidden');
+                document.getElementById('editApplicationResult').className = 'result hidden';
+                
+                showEditApplicationForm();
+            } catch (error) {
+                console.error('获取应用信息失败:', error);
+                alert('获取应用信息失败: ' + error.message);
+            }
+        }
+
+        async function saveEditApplication() {
+            const applicationId = document.getElementById('editApplicationId').value;
+            const name = document.getElementById('editApplicationName').value;
+            const description = document.getElementById('editApplicationDescription').value;
+            const isActive = document.getElementById('editApplicationIsActive').checked;
+            const resultDiv = document.getElementById('editApplicationResult');
+            
+            if (!name.trim()) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = '<h3>错误</h3><p>应用名称为必填项</p>';
+                return;
+            }
+            
+            resultDiv.className = 'result loading';
+            resultDiv.innerHTML = '<div class="loading">正在保存应用...</div>';
+            
+            try {
+                const response = await fetch(UI_PREFIX + `/applications/${applicationId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: name,
+                        description: description,
+                        is_active: isActive
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || '更新应用失败');
+                }
+                
+                resultDiv.className = 'result success';
+                resultDiv.innerHTML = '<h3>成功</h3><p>应用更新成功</p>';
+                
+                setTimeout(() => {
+                    loadApplicationsList();
+                    hideEditApplicationForm();
+                }, 1500);
+            } catch (error) {
+                console.error('更新应用失败:', error);
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `<h3>错误</h3><p>${error.message || '更新应用失败'}</p>`;
+            }
+        }
+
+        function showEditApplicationForm() {
+            const modal = document.getElementById('modalContainer');
+            const form = document.getElementById('editApplicationForm');
+            
+            document.getElementById('modalTitle').textContent = '编辑应用';
+            
+            const allForms = ['addCategoryForm', 'editCategoryForm', 'addApplicationForm', 'editApplicationForm', 'addApiKeyForm', 'editApiKeyForm'];
+            allForms.forEach(formId => {
+                document.getElementById(formId).classList.add('hidden');
+                document.getElementById(formId).classList.remove('active');
+            });
+            
+            form.classList.remove('hidden');
+            form.classList.add('active');
+            modal.classList.remove('hidden');
+            modal.classList.add('active');
+        }
+
+        function hideEditApplicationForm() {
+            const form = document.getElementById('editApplicationForm');
+            const modal = document.getElementById('modalContainer');
+            
+            form.classList.add('hidden');
+            form.classList.remove('active');
+            modal.classList.add('hidden');
+            modal.classList.remove('active');
+            
+            document.getElementById('editApplicationResult').classList.add('hidden');
+        }
+
+        async function deleteApplication(applicationId, appKey) {
+            if (!confirm(`确定要删除应用 "${appKey}" 吗？这将同时删除该应用的所有分类和规则。`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(UI_PREFIX + `/applications/${applicationId}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    throw new Error('删除应用失败');
+                }
+
+                alert('应用删除成功');
+                loadApplicationsList();
+            } catch (error) {
+                console.error('删除应用失败:', error);
+                alert('删除应用失败: ' + error.message);
+            }
+        }
+
+        async function manageApplicationCategories(applicationId, appKey) {
+            const modal = document.getElementById('modalContainer');
+            const form = document.getElementById('addCategoryForm');
+
+            document.getElementById('modalTitle').textContent = '为应用添加分类';
+
+            modal.classList.remove('hidden');
+
+            document.getElementById('addRuleForm').classList.add('hidden');
+            document.getElementById('addRuleForm').classList.remove('active');
+            document.getElementById('editRuleForm').classList.add('hidden');
+            document.getElementById('editRuleForm').classList.remove('active');
+            document.getElementById('addCategoryForm').classList.add('hidden');
+            document.getElementById('addCategoryForm').classList.remove('active');
+            document.getElementById('editCategoryForm').classList.add('hidden');
+            document.getElementById('editCategoryForm').classList.remove('active');
+            document.getElementById('addApplicationForm').classList.add('hidden');
+            document.getElementById('addApplicationForm').classList.remove('active');
+            document.getElementById('editApiKeyForm').classList.add('hidden');
+            document.getElementById('editApiKeyForm').classList.remove('active');
+
+            form.classList.remove('hidden');
+            form.classList.add('active');
+
+            const applicationIdInput = document.getElementById('newCategoryIdApplicationId');
+            if (!applicationIdInput) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.id = 'newCategoryIdApplicationId';
+                input.name = 'application_id';
+                input.value = applicationId;
+                form.insertBefore(input, form.firstChild);
+            } else {
+                applicationIdInput.value = applicationId;
+            }
+
+            const appKeyDisplay = document.getElementById('currentAppKeyDisplay');
+            if (!appKeyDisplay) {
+                const display = document.createElement('p');
+                display.id = 'currentAppKeyDisplay';
+                display.style.margin = '10px 0';
+                display.style.padding = '10px';
+                display.style.background = '#e9ecef';
+                display.style.borderRadius = '4px';
+                display.textContent = `当前应用: ${appKey}`;
+                form.insertBefore(display, form.firstChild);
+            } else {
+                appKeyDisplay.textContent = `当前应用: ${appKey}`;
+            }
+        }
+        
+        function showAddApiKeyForm() {
+            const modal = document.getElementById('modalContainer');
+            const form = document.getElementById('addApiKeyForm');
+            
+            // Update modal title
+            document.getElementById('modalTitle').textContent = '添加新API密钥';
+            
+            // Show modal
+            modal.classList.remove('hidden');
+            
+            // Hide all forms
+            document.getElementById('addRuleForm').classList.add('hidden');
+            document.getElementById('addRuleForm').classList.remove('active');
+            document.getElementById('editRuleForm').classList.add('hidden');
+            document.getElementById('editRuleForm').classList.remove('active');
+            document.getElementById('addCategoryForm').classList.add('hidden');
+            document.getElementById('addCategoryForm').classList.remove('active');
+            document.getElementById('editCategoryForm').classList.add('hidden');
+            document.getElementById('editCategoryForm').classList.remove('active');
+            document.getElementById('addApplicationForm').classList.add('hidden');
+            document.getElementById('addApplicationForm').classList.remove('active');
+            document.getElementById('editApiKeyForm').classList.add('hidden');
+            document.getElementById('editApiKeyForm').classList.remove('active');
+            
+            // Show add API key form
+            form.classList.remove('hidden');
+            form.classList.add('active');
+        }
+        
+        function hideAddApiKeyForm() {
+            closeModal();
+            document.getElementById('addApiKeyResult').classList.add('hidden');
+            // 重置表单
+            document.getElementById('newApiKeyDescription').value = '';
+            document.getElementById('newApiKeyRateLimit').value = '100';
+            document.getElementById('newApiKeyExpiresAt').value = '';
+        }
+        
+        function showEditApiKeyForm() {
+            const modal = document.getElementById('modalContainer');
+            const form = document.getElementById('editApiKeyForm');
+            
+            // Update modal title
+            document.getElementById('modalTitle').textContent = '编辑API密钥';
+            
+            // Show modal
+            modal.classList.remove('hidden');
+            
+            // Hide all forms
+            document.getElementById('addRuleForm').classList.add('hidden');
+            document.getElementById('addRuleForm').classList.remove('active');
+            document.getElementById('editRuleForm').classList.add('hidden');
+            document.getElementById('editRuleForm').classList.remove('active');
+            document.getElementById('addCategoryForm').classList.add('hidden');
+            document.getElementById('addCategoryForm').classList.remove('active');
+            document.getElementById('editCategoryForm').classList.add('hidden');
+            document.getElementById('editCategoryForm').classList.remove('active');
+            document.getElementById('addApplicationForm').classList.add('hidden');
+            document.getElementById('addApplicationForm').classList.remove('active');
+            document.getElementById('addApiKeyForm').classList.add('hidden');
+            document.getElementById('addApiKeyForm').classList.remove('active');
+            
+            // Show edit API key form
+            form.classList.remove('hidden');
+            form.classList.add('active');
+        }
+        
+        function hideEditApiKeyForm() {
+            closeModal();
+            document.getElementById('editApiKeyResult').classList.add('hidden');
+        }
+        
+        async function editApiKey(apiKey) {
+            try {
+                const url = `/api/v1/admin/api-keys/${apiKey}`;
+                console.log('获取API密钥详情:', apiKey, 'URL:', url);
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    console.error('加载API密钥详情失败 - 状态码:', response.status);
+                    const errorText = await response.text();
+                    console.error('错误响应:', errorText);
+
+                    if (response.status === 404 || response.status === 405) {
+                        alert('API密钥编辑功能暂不可用，请使用"删除"后重新"添加"的方式修改');
+                    } else {
+                        throw new Error('加载API密钥详情失败');
+                    }
+                    return;
+                }
+
+                const apiKeyData = await response.json();
+                console.log('API密钥详情:', apiKeyData);
+
+                // 填充编辑表单
+                document.getElementById('editApiKeyId').value = apiKeyData.id;
+                document.getElementById('editApiKeyDescription').value = apiKeyData.description;
+                document.getElementById('editApiKeyRateLimit').value = apiKeyData.rate_limit;
+                document.getElementById('editApiKeyExpiresAt').value = apiKeyData.expires_at ? new Date(apiKeyData.expires_at).toISOString().slice(0, 16) : '';
+                document.getElementById('editApiKeyIsActive').checked = apiKeyData.is_active;
+
+                // 显示编辑弹窗
+                showEditApiKeyForm();
+            } catch (error) {
+                console.error('加载API密钥详情失败:', error);
+                if (error.message !== 'API密钥编辑功能暂不可用，请使用"删除"后重新"添加"的方式修改') {
+                    alert(`加载API密钥详情失败: ${error.message}`);
+                }
+            }
+        }
+        
+        async function saveNewApiKey() {
+            const description = document.getElementById('newApiKeyDescription').value;
+            const rateLimit = document.getElementById('newApiKeyRateLimit').value;
+            const expiresAt = document.getElementById('newApiKeyExpiresAt').value;
+            const resultDiv = document.getElementById('addApiKeyResult');
+            
+            resultDiv.className = 'result loading';
+            resultDiv.innerHTML = '<div class="loading">正在创建API密钥...</div>';
+            
+            try {
+                // 调用后端 API 创建新API密钥
+                const response = await fetch('/api/v1/admin/api-keys', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        description: description, 
+                        rate_limit: parseInt(rateLimit),
+                        expires_at: expiresAt 
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || '创建API密钥失败');
+                }
+                
+                const data = await response.json();
+                resultDiv.className = 'result success';
+                resultDiv.innerHTML = `<h3>成功</h3><p>API密钥创建成功</p><p><strong>API密钥:</strong> <span class="code">${data.api_key}</span> <button class="btn" style="padding: 2px 6px; font-size: 10px; margin-left: 10px;" onclick="copyNewApiKey('${data.api_key}')">复制</button></p>`;
+                
+                // 刷新API密钥列表
+                setTimeout(() => {
+                    loadApiKeysList();
+                    hideAddApiKeyForm();
+                }, 1500);
+            } catch (error) {
+                console.error('创建API密钥失败:', error);
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `<h3>错误</h3><p>${error.message || '创建API密钥失败'}</p>`;
+            }
+        }
+        
+        async function saveEditApiKey() {
+            const id = document.getElementById('editApiKeyId').value;
+            const description = document.getElementById('editApiKeyDescription').value;
+            const rateLimit = document.getElementById('editApiKeyRateLimit').value;
+            const expiresAt = document.getElementById('editApiKeyExpiresAt').value;
+            const isActive = document.getElementById('editApiKeyIsActive').checked;
+            const resultDiv = document.getElementById('editApiKeyResult');
+            
+            resultDiv.className = 'result loading';
+            resultDiv.innerHTML = '<div class="loading">正在保存API密钥...</div>';
+            
+            try {
+                // 调用后端 API 更新API密钥
+                const response = await fetch(`/api/v1/admin/api-keys/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        description: description, 
+                        rate_limit: parseInt(rateLimit),
+                        expires_at: expiresAt,
+                        is_active: isActive,
+                        permissions: {}
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || '更新API密钥失败');
+                }
+                
+                resultDiv.className = 'result success';
+                resultDiv.innerHTML = '<h3>成功</h3><p>API密钥更新成功</p>';
+                
+                // 刷新API密钥列表
+                setTimeout(() => {
+                    loadApiKeysList();
+                    hideEditApiKeyForm();
+                }, 1500);
+            } catch (error) {
+                console.error('更新API密钥失败:', error);
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `<h3>错误</h3><p>${error.message || '更新API密钥失败'}</p>`;
+            }
+        }
+        
+        async function loadApplicationsList() {
+            const pageSize = document.getElementById('applicationPageSize').value;
+            const tableBody = document.getElementById('applicationsTableBody');
+
+            tableBody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd;">正在加载应用...</td></tr>';
+
+            try {
+                // 构建查询参数
+                const queryString = `?page=${currentApplicationPage}&page_size=${pageSize}`;
+
+                // 调用后端 API 获取应用列表
+                const response = await fetch(UI_PREFIX + '/applications' + queryString);
+                if (!response.ok) {
+                    throw new Error('加载应用失败');
+                }
+                const data = await response.json();
+                const applicationsList = data.items || [];
+                totalApplicationPages = Math.ceil(data.total / pageSize) || 1;
+
+                // 更新分页信息
+                document.getElementById('applicationPageInfo').textContent = `第${currentApplicationPage}页/共${totalApplicationPages}页`;
+                document.getElementById('prevApplicationPage').disabled = currentApplicationPage === 1;
+                document.getElementById('nextApplicationPage').disabled = currentApplicationPage === totalApplicationPages;
+
+                // 填充表格
+                tableBody.innerHTML = '';
+                if (applicationsList.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd;">未找到应用</td></tr>';
+                } else {
+                    applicationsList.forEach(app => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td style="padding: 10px; border: 1px solid #ddd;">${app.id}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${app.app_key}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${app.name}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${app.description || '-'}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${app.is_active ? '激活' : '停用'}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">
+                                <button class="btn" style="padding: 5px 10px; font-size: 12px;" onclick="editApplication(${app.id})">编辑</button>
+                                <button class="btn" style="padding: 5px 10px; font-size: 12px; background: #dc3545;" onclick="deleteApplication(${app.id}, '${app.app_key}')">删除</button>
+                            </td>
+                        `;
+                        tableBody.appendChild(row);
+                    });
+                }
+
+                // 更新应用选项
+                loadApplicationOptions();
+                applicationsLoaded = true;
+            } catch (error) {
+                console.error('加载应用失败:', error);
+                tableBody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd; color: #dc3545;">加载应用失败</td></tr>';
+            }
+        }
+
+        function changeApplicationPage(direction) {
+            const newPage = currentApplicationPage + direction;
+            if (newPage >= 1 && newPage <= totalApplicationPages) {
+                currentApplicationPage = newPage;
+                loadApplicationsList();
+            }
+        }
+
+        async function loadApplicationOptions() {
+            try {
+                const response = await fetch(UI_PREFIX + '/applications');
+                if (!response.ok) {
+                    throw new Error('加载应用失败');
+                }
+                const data = await response.json();
+                const appsList = data.items || [];
+
+                const appKeySelect = document.getElementById('appKey');
+                const debugAppKeySelect = document.getElementById('debugAppKey');
+
+                while (appKeySelect.options.length > 1) {
+                    appKeySelect.remove(1);
+                }
+
+                while (debugAppKeySelect.options.length > 1) {
+                    debugAppKeySelect.remove(1);
+                }
+
+                appsList.forEach(app => {
+                    const option1 = document.createElement('option');
+                    option1.value = app.app_key;
+                    option1.textContent = app.app_key;
+                    appKeySelect.appendChild(option1);
+
+                    const option2 = document.createElement('option');
+                    option2.value = app.app_key;
+                    option2.textContent = app.app_key;
+                    debugAppKeySelect.appendChild(option2);
+                });
+
+                if (appsList.length > 0) {
+                    defaultApiKey = appsList[0].app_key;
+                }
+
+                appsLoaded = true;
+            } catch (error) {
+                console.error('加载应用选项失败:', error);
+                appsLoaded = false;
+            }
+        }
+
+        async function loadApiKeysList() {
+            const pageSize = document.getElementById('apiPageSize').value;
+            const tableBody = document.getElementById('apiKeysTableBody');
+            
+            tableBody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd;">正在加载API密钥...</td></tr>';
+            
+            try {
+                // 构建查询参数
+                const queryString = `?page=${currentApiPage}&page_size=${pageSize}`;
+                
+                // 调用后端 API 获取API密钥列表
+                const response = await fetch('/api/v1/admin/api-keys' + queryString);
+                if (!response.ok) {
+                    throw new Error('加载API密钥失败');
+                }
+                const data = await response.json();
+                const apiKeysList = data.items || [];
+                totalApiPages = data.total_pages || 1;
+                
+                // 更新分页信息
+                document.getElementById('apiPageInfo').textContent = `第${currentApiPage}页/共${totalApiPages}页`;
+                document.getElementById('prevApiPage').disabled = currentApiPage === 1;
+                document.getElementById('nextApiPage').disabled = currentApiPage === totalApiPages;
+                
+                // 填充表格
+                tableBody.innerHTML = '';
+                if (apiKeysList.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd;">未找到API密钥</td></tr>';
+                } else {
+                    apiKeysList.forEach(apiKey => {
+                        const row = document.createElement('tr');
+                        const statusClass = apiKey.is_active ? 'style="color: #28a745; font-weight: bold;"' : 'style="color: #dc3545; font-weight: bold;"';
+                        const statusText = apiKey.is_active ? '活跃' : '禁用';
+                        row.innerHTML = `
+                            <td style="padding: 10px; border: 1px solid #ddd;">
+                                <div style="display: flex; align-items: center; gap: 5px;">
+                                    <span class="api-key-masked" id="apiKeyMasked_${apiKey.id}">${apiKey.full_key.substring(0, 8)}...${apiKey.full_key.substring(apiKey.full_key.length - 4)}</span>
+                                    <span class="api-key-full hidden" id="apiKeyFull_${apiKey.id}">${apiKey.full_key}</span>
+                                    <button class="btn btn-sm" style="padding: 4px 8px; font-size: 12px; background: #f8f9fa; color: #495057; border: 1px solid #ced4da; border-radius: 4px; cursor: pointer;" onmouseover="this.style.background='#e9ecef'" onmouseout="this.style.background='#f8f9fa'" onclick="toggleApiKeyVisibility(${apiKey.id})"><i class="fas fa-eye"></i></button>
+                                    <button class="btn btn-sm" style="padding: 4px 8px; font-size: 12px; background: #f8f9fa; color: #495057; border: 1px solid #ced4da; border-radius: 4px; cursor: pointer;" onmouseover="this.style.background='#e9ecef'" onmouseout="this.style.background='#f8f9fa'" onclick="copyApiKey('${apiKey.full_key}', this)"><i class="fas fa-copy"></i></button>
+                                </div>
+                            </td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${apiKey.description || '-'}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${apiKey.rate_limit}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${apiKey.expires_at ? new Date(apiKey.expires_at).toLocaleString() : '永不过期'}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;"><span ${statusClass}>${statusText}</span></td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">
+                                <button class="btn" style="padding: 5px 10px; font-size: 12px;" onclick="editApiKey(${apiKey.id})">编辑</button>
+                                <button class="btn" style="padding: 5px 10px; font-size: 12px; background: #dc3545;" onclick="deleteApiKey(${apiKey.id})">删除</button>
+                            </td>
+                        `;
+                        tableBody.appendChild(row);
+                    });
+                }
+            } catch (error) {
+                console.error('加载API密钥失败:', error);
+                tableBody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd; color: #dc3545;">加载API密钥失败</td></tr>';
+            }
+        }
+        
+        function changeApiPage(direction) {
+            const newPage = currentApiPage + direction;
+            if (newPage >= 1 && newPage <= totalApiPages) {
+                currentApiPage = newPage;
+                loadApiKeysList();
+            }
+        }
+        
+        async function deleteRule(ruleId) {
+            if (!confirm('确定要删除此规则吗？')) {
+                return;
+            }
+            
+            try {
+                // 调用后端 API 删除规则
+                const response = await fetch(UI_PREFIX + `/rules/${ruleId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('删除规则失败');
+                }
+                
+                // 刷新规则列表
+                loadRules();
+            } catch (error) {
+                console.error('删除规则失败:', error);
+                alert('删除规则失败');
+            }
+        }
+        
+        async function deleteCategory(categoryId) {
+            if (!confirm('确定要删除此分类吗？')) {
+                return;
+            }
+            
+            try {
+                // 调用后端 API 删除分类
+                const response = await fetch(UI_PREFIX + `/categories/${categoryId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('删除分类失败');
+                }
+                
+                // 刷新分类列表
+                loadCategoriesList();
+            } catch (error) {
+                console.error('删除分类失败:', error);
+                alert('删除分类失败');
+            }
+        }
+        
+        async function deleteApp(appKey) {
+            if (!confirm('确定要删除此应用吗？')) {
+                return;
+            }
+            
+            try {
+                // 调用后端 API 删除应用
+                const response = await fetch(UI_PREFIX + `/apps/${appKey}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('删除应用失败');
+                }
+                
+                // 刷新应用列表
+                loadAppsList();
+            } catch (error) {
+                console.error('删除应用失败:', error);
+                alert('删除应用失败');
+            }
+        }
+        
+        async function deleteApiKey(apiKey) {
+            if (!confirm('确定要删除此API密钥吗？')) {
+                return;
+            }
+            
+            try {
+                // 调用后端 API 删除API密钥
+                const response = await fetch(`/api/v1/admin/api-keys/${apiKey}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('删除API密钥失败');
+                }
+                
+                // 刷新API密钥列表
+                loadApiKeysList();
+            } catch (error) {
+                console.error('删除API密钥失败:', error);
+                alert('删除API密钥失败');
+            }
+        }
+        
+        function toggleApiKeyVisibility(apiKeyId) {
+            const maskedElement = document.getElementById(`apiKeyMasked_${apiKeyId}`);
+            const fullElement = document.getElementById(`apiKeyFull_${apiKeyId}`);
+            
+            if (maskedElement && fullElement) {
+                maskedElement.classList.toggle('hidden');
+                fullElement.classList.toggle('hidden');
+            }
+        }
+        
+        function copyApiKey(apiKey, buttonElement) {
+            navigator.clipboard.writeText(apiKey)
+                .then(() => {
+                    showCopySuccess(buttonElement);
+                })
+                .catch(err => {
+                    console.error('复制API密钥失败:', err);
+                    alert('复制API密钥失败');
+                });
+        }
+        
+        function showCopySuccess(element) {
+            const originalText = element.innerHTML;
+            element.innerHTML = '<i class="fas fa-check"></i>';
+            element.style.backgroundColor = '#28a745';
+            element.style.color = 'white';
+            
+            setTimeout(() => {
+                element.innerHTML = originalText;
+                element.style.backgroundColor = '';
+                element.style.color = '';
+            }, 2000);
+        }
+        
+        function copyNewApiKey(apiKey) {
+            navigator.clipboard.writeText(apiKey)
+                .then(() => {
+                    alert('API密钥已复制到剪贴板');
+                })
+                .catch(err => {
+                    console.error('复制API密钥失败:', err);
+                    alert('复制API密钥失败');
+                });
+        }
+        
+        // 初始化加载
+        async function init() {
+            try {
+                await loadCategories();
+                await loadApplicationsList();
+                await loadRules();
+                await loadCategoriesList();
+                await loadApiKeysList();
+            } catch (error) {
+                console.error('初始化失败:', error);
+            }
+        }
+        
+        // 页面加载完成后初始化
+        window.onload = init;
+    </script>
+</body>
+</html>

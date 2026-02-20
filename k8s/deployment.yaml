@@ -1,0 +1,236 @@
+# Kubernetes Deployment for Intent Recognition Service
+
+# ============================================================================
+# Namespace
+# ============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: intent-service
+  labels:
+    app: intent-service
+
+---
+# ============================================================================
+# ConfigMap
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: intent-service-config
+  namespace: intent-service
+data:
+  APP_NAME: "intent-service"
+  ENVIRONMENT: "production"
+  DEBUG: "false"
+  API_HOST: "0.0.0.0"
+  API_PORT: "8000"
+  DB_HOST: "postgres-service"
+  DB_PORT: "5432"
+  DB_NAME: "intent_service"
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  MODEL_TYPE: "bge-m3"
+  MODEL_DEVICE: "cuda"
+  ENABLE_CACHE: "true"
+  ENABLE_REGEX_MATCHING: "true"
+  ENABLE_SEMANTIC_MATCHING: "true"
+  ENABLE_KEYWORD_MATCHING: "true"
+  SEMANTIC_SIMILARITY_THRESHOLD: "0.75"
+  ENABLE_LLM_FALLBACK: "false"
+
+---
+# ============================================================================
+# Secret
+# ============================================================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: intent-service-secret
+  namespace: intent-service
+type: Opaque
+stringData:
+  DB_USER: "postgres"
+  DB_PASSWORD: "your-db-password"
+  REDIS_PASSWORD: ""
+  ADMIN_API_KEY: "your-admin-api-key"
+
+---
+# ============================================================================
+# Deployment
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: intent-service
+  namespace: intent-service
+  labels:
+    app: intent-service
+    component: api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: intent-service
+      component: api
+  template:
+    metadata:
+      labels:
+        app: intent-service
+        component: api
+        version: v1
+    spec:
+      containers:
+        - name: intent-service
+          image: intent-service:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: intent-service-secret
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: intent-service-secret
+                  key: DB_PASSWORD
+            - name: ADMIN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: intent-service-secret
+                  key: ADMIN_API_KEY
+          envFrom:
+            - configMapRef:
+                name: intent-service-config
+          volumeMounts:
+            - name: models
+              mountPath: /models
+              readOnly: true
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: models-pvc
+
+---
+# ============================================================================
+# Service
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: intent-service
+  namespace: intent-service
+  labels:
+    app: intent-service
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+      protocol: TCP
+  selector:
+    app: intent-service
+    component: api
+
+---
+# ============================================================================
+# HorizontalPodAutoscaler
+# ============================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: intent-service-hpa
+  namespace: intent-service
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: intent-service
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+---
+# ============================================================================
+# PersistentVolumeClaim for Models
+# ============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: models-pvc
+  namespace: intent-service
+spec:
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: nfs-storage
+
+---
+# ============================================================================
+# ServiceMonitor for Prometheus (Optional)
+# ============================================================================
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: intent-service
+  namespace: intent-service
+  labels:
+    app: intent-service
+spec:
+  selector:
+    matchLabels:
+      app: intent-service
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
