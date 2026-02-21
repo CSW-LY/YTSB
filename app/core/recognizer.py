@@ -6,7 +6,7 @@ import logging
 from typing import Dict, Optional
 
 from app.core.config import get_settings
-from app.models.database import AppIntent
+from app.models.database import Application
 from app.services.recognizer import (
     KeywordRecognizer,
     RegexRecognizer,
@@ -26,19 +26,19 @@ _recognizer_chain_cache: Dict[str, RecognizerChain] = {}
 _config_version_cache: Dict[str, str] = {}
 
 
-def _get_app_config_key(app_config: AppIntent) -> str:
+def _get_app_config_key(application: Application) -> str:
     """生成应用配置的唯一键。"""
     config_data = {
-        "app_key": app_config.app_key,
-        "enable_keyword": app_config.enable_keyword_matching,
-        "enable_regex": app_config.enable_regex_matching,
-        "enable_semantic": app_config.enable_semantic_matching,
-        "enable_llm": app_config.enable_llm_fallback,
+        "app_key": application.app_key,
+        "enable_keyword": application.enable_keyword,
+        "enable_regex": application.enable_regex,
+        "enable_semantic": application.enable_semantic,
+        "enable_llm": application.enable_llm_fallback,
         "semantic_threshold": settings.semantic_similarity_threshold,
     }
     config_str = json.dumps(config_data, sort_keys=True)
     config_hash = hashlib.md5(config_str.encode()).hexdigest()
-    return f"{app_config.app_key}:{config_hash}"
+    return f"{application.app_key}:{config_hash}"
 
 
 async def get_recognizer_chain() -> RecognizerChain:
@@ -70,33 +70,34 @@ async def get_recognizer_chain() -> RecognizerChain:
     return chain
 
 
-async def get_recognizer_chain_for_app(app_config: AppIntent) -> RecognizerChain:
+async def get_recognizer_chain_for_app(application: Application) -> RecognizerChain:
     """
     根据应用配置创建或获取缓存的识别器链。
 
     使用缓存避免每次请求都重新初始化模型，特别是语义模型。
     """
-    config_key = _get_app_config_key(app_config)
+    config_key = _get_app_config_key(application)
 
     if config_key in _recognizer_chain_cache:
-        logger.debug(f"Using cached recognizer chain for {app_config.app_key}")
+        logger.debug(f"Using cached recognizer chain for {application.app_key} (cache key: {config_key})")
         return _recognizer_chain_cache[config_key]
 
-    logger.info(f"Creating new recognizer chain for {app_config.app_key}")
+    logger.warning(f"Creating new recognizer chain for {application.app_key} (cache key: {config_key})")
+    logger.warning(f"Application config - enable_keyword: {application.enable_keyword}, enable_regex: {application.enable_regex}, enable_semantic: {application.enable_semantic}, enable_llm_fallback: {application.enable_llm_fallback}")
     recognizers = []
 
-    if app_config.enable_keyword_matching:
+    if application.enable_keyword:
         recognizers.append(KeywordRecognizer())
 
-    if app_config.enable_regex_matching:
+    if application.enable_regex:
         recognizers.append(RegexRecognizer())
 
-    if app_config.enable_semantic_matching and settings.enable_semantic_matching:
+    if application.enable_semantic and settings.enable_semantic_matching:
         recognizers.append(SemanticRecognizer({
             "threshold": settings.semantic_similarity_threshold,
         }))
 
-    if app_config.enable_llm_fallback and settings.enable_llm_fallback:
+    if application.enable_llm_fallback and settings.enable_llm_fallback:
         recognizers.append(LLMRecognizer())
 
     chain = RecognizerChain(recognizers)
@@ -106,7 +107,7 @@ async def get_recognizer_chain_for_app(app_config: AppIntent) -> RecognizerChain
     _config_version_cache[config_key] = config_key
 
     logger.info(
-        f"Cached recognizer chain for app {app_config.app_key} with {len(recognizers)} recognizers"
+        f"Cached recognizer chain for app {application.app_key} with {len(recognizers)} recognizers"
     )
     return chain
 
@@ -128,3 +129,19 @@ async def clear_recognizer_cache(app_key: Optional[str] = None) -> None:
         _recognizer_chain_cache.clear()
         _config_version_cache.clear()
         logger.info("Cleared all recognizer cache")
+
+
+def get_llm_recognizer() -> Optional[LLMRecognizer]:
+    """
+    Get LLM recognizer instance from cached chains.
+
+    Returns:
+        LLMRecognizer instance if found, None otherwise
+    """
+    for chain in _recognizer_chain_cache.values():
+        for recognizer in chain.recognizers:
+            if isinstance(recognizer, LLMRecognizer):
+                logger.debug(f"Found LLM recognizer in cached chain")
+                return recognizer
+    logger.warning("No LLM recognizer found in cached chains")
+    return None

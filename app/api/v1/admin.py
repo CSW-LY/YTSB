@@ -6,16 +6,16 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core import clear_recognizer_cache
+from app.core import clear_recognizer_cache, get_llm_recognizer
 from app.core.security import verify_admin_api_key
 from app.core.config import get_settings
 from app.db import async_session_maker
 from fastapi import Header
 from app.models.database import IntentCategory, IntentRecognitionLog
 from app.models.schema import (
-    AppIntentCreate,
-    AppIntentResponse,
-    AppIntentUpdate,
+    ApplicationCreate,
+    ApplicationResponse,
+    ApplicationUpdate,
     IntentCategoryCreate,
     IntentCategoryResponse,
     IntentCategoryUpdate,
@@ -74,6 +74,7 @@ async def create_intent_category(
     async with async_session_maker() as session:
         svc = ConfigService(session)
         category = await svc.create_category(
+            application_id=data.application_id,
             code=data.code,
             name=data.name,
             description=data.description,
@@ -259,6 +260,60 @@ async def update_intent_rule(
     return IntentRuleResponse.model_validate(rule)
 
 
+@router.put("/rules/{rule_id}/enable", response_model=IntentRuleResponse)
+async def enable_intent_rule(
+    rule_id: int,
+    config_service: ConfigService = Depends(get_config_service),
+) -> IntentRuleResponse:
+    """Enable an intent rule."""
+
+    async with async_session_maker() as session:
+        svc = ConfigService(session)
+        rule = await svc.update_rule(
+            rule_id,
+            enabled=True,
+        )
+
+        if not rule:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Intent rule not found: {rule_id}",
+            )
+
+        await session.commit()
+        await session.refresh(rule)
+
+    logger.info(f"Enabled intent rule: {rule_id}")
+    return IntentRuleResponse.model_validate(rule)
+
+
+@router.put("/rules/{rule_id}/disable", response_model=IntentRuleResponse)
+async def disable_intent_rule(
+    rule_id: int,
+    config_service: ConfigService = Depends(get_config_service),
+) -> IntentRuleResponse:
+    """Disable an intent rule."""
+
+    async with async_session_maker() as session:
+        svc = ConfigService(session)
+        rule = await svc.update_rule(
+            rule_id,
+            enabled=False,
+        )
+
+        if not rule:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Intent rule not found: {rule_id}",
+            )
+
+        await session.commit()
+        await session.refresh(rule)
+
+    logger.info(f"Disabled intent rule: {rule_id}")
+    return IntentRuleResponse.model_validate(rule)
+
+
 @router.delete("/rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_intent_rule(
     rule_id: int,
@@ -280,110 +335,119 @@ async def delete_intent_rule(
 
     logger.info(f"Deleted intent rule: {rule_id}")
 
-
 # ============================================================================
-# App Configuration Endpoints
+# Application Configuration Endpoints
 # ============================================================================
 
-@router.post("/apps/{app_key}/intents", response_model=AppIntentResponse, status_code=status.HTTP_201_CREATED)
-async def create_app_config(
-    app_key: str,
-    data: AppIntentCreate,
+@router.get("/applications", response_model=List[ApplicationResponse])
+async def list_applications(
+    is_active: bool = Query(None, description="Filter by active status"),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
     config_service: ConfigService = Depends(get_config_service),
-) -> AppIntentResponse:
-    """Create app intent configuration."""
+) -> List[ApplicationResponse]:
+    """List all applications."""
 
     async with async_session_maker() as session:
         svc = ConfigService(session)
-        app_config = await svc.create_app_config(
-            app_key=app_key,
-            intent_ids=data.intent_ids,
-            confidence_threshold=data.confidence_threshold,
-            fallback_intent_code=data.fallback_intent_code,
-            enable_cache=data.enable_cache,
-            enable_keyword_matching=data.enable_keyword_matching,
-            enable_regex_matching=data.enable_regex_matching,
-            enable_semantic_matching=data.enable_semantic_matching,
-            enable_llm_fallback=data.enable_llm_fallback,
+        applications = await svc.list_applications(
+            is_active=is_active,
+            limit=limit,
+            offset=offset,
         )
 
-        await session.commit()
-        await session.refresh(app_config)
-
-    logger.info(f"Created app config: {app_key}")
-    return AppIntentResponse.model_validate(app_config)
+    return [ApplicationResponse.model_validate(app) for app in applications]
 
 
-@router.get("/apps/{app_key}/intents", response_model=AppIntentResponse)
-async def get_app_config(
-    app_key: str,
+@router.get("/applications/{application_id}", response_model=ApplicationResponse)
+async def get_application(
+    application_id: int,
     config_service: ConfigService = Depends(get_config_service),
-) -> AppIntentResponse:
-    """Get app intent configuration."""
+) -> ApplicationResponse:
+    """Get application by ID."""
 
     async with async_session_maker() as session:
         svc = ConfigService(session)
-        app_config = await svc.get_app_config(app_key)
+        application = await svc.get_application_by_id(application_id)
 
-    if not app_config:
+    if not application:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"App configuration not found: {app_key}",
+            detail=f"Application not found: {application_id}",
         )
 
-    return AppIntentResponse.model_validate(app_config)
+    return ApplicationResponse.model_validate(application)
 
 
-@router.put("/apps/{app_key}/intents", response_model=AppIntentResponse)
-async def update_app_config(
+@router.get("/applications/by-key/{app_key}", response_model=ApplicationResponse)
+async def get_application_by_key(
     app_key: str,
-    data: AppIntentUpdate,
     config_service: ConfigService = Depends(get_config_service),
-) -> AppIntentResponse:
-    """Update app intent configuration."""
+) -> ApplicationResponse:
+    """Get application by app key."""
 
     async with async_session_maker() as session:
         svc = ConfigService(session)
-        app_config = await svc.update_app_config(
-            app_key,
+        application = await svc.get_application_by_key(app_key)
+
+    if not application:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Application not found: {app_key}",
+        )
+
+    return ApplicationResponse.model_validate(application)
+
+
+@router.put("/applications/{application_id}", response_model=ApplicationResponse)
+async def update_application(
+    application_id: int,
+    data: ApplicationUpdate,
+    config_service: ConfigService = Depends(get_config_service),
+) -> ApplicationResponse:
+    """Update application configuration."""
+
+    async with async_session_maker() as session:
+        svc = ConfigService(session)
+        application = await svc.update_application(
+            application_id,
             **data.model_dump(exclude_unset=True),
         )
 
-        if not app_config:
+        if not application:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"App configuration not found: {app_key}",
+                detail=f"Application not found: {application_id}",
             )
 
         await session.commit()
-        await session.refresh(app_config)
+        await session.refresh(application)
 
-        logger.info(f"Updated app config: {app_key}")
-        await clear_recognizer_cache(app_key)
-        return AppIntentResponse.model_validate(app_config)
+    logger.info(f"Updated application: {application_id}")
+    await clear_recognizer_cache(application.app_key)
+    return ApplicationResponse.model_validate(application)
 
 
-@router.delete("/apps/{app_key}/intents", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_app_config(
-    app_key: str,
+@router.delete("/applications/{application_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_application(
+    application_id: int,
     config_service: ConfigService = Depends(get_config_service),
 ) -> None:
-    """Delete app intent configuration."""
+    """Delete application."""
 
     async with async_session_maker() as session:
         svc = ConfigService(session)
-        success = await svc.delete_app_config(app_key)
+        success = await svc.delete_application(application_id)
 
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"App configuration not found: {app_key}",
+                detail=f"Application not found: {application_id}",
             )
 
         await session.commit()
-        await clear_recognizer_cache(app_key)
 
-    logger.info(f"Deleted app config: {app_key}")
+    logger.info(f"Deleted application: {application_id}")
 
 
 # ============================================================================
@@ -832,22 +896,6 @@ async def get_api_keys_summary_stats(
         }
 
 
-@router.get("/apps", response_model=List[AppIntentResponse])
-async def list_app_configs(
-    limit: int = Query(100, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
-    config_service: ConfigService = Depends(get_config_service),
-) -> List[AppIntentResponse]:
-    """List all app configurations."""
-
-    async with async_session_maker() as session:
-        svc = ConfigService(session)
-        app_configs = await svc.list_app_configs(
-            limit=limit,
-            offset=offset,
-        )
-
-    return [AppIntentResponse.model_validate(c) for c in app_configs]
 
 
 # ============================================================================
@@ -1013,4 +1061,133 @@ async def get_recognition_stats(
         "failure_rate": (failure_count / total_count * 100) if total_count > 0 else 0,
         "average_processing_time_ms": avg_time,
         "top_intents": top_intents
+    }
+
+
+# ============================================================================
+# System Status Endpoints
+# ============================================================================
+
+@router.get("/status/llm")
+async def get_llm_status(
+    _auth: None = Depends(optional_admin_auth),
+) -> dict:
+    """Get LLM connection status and health information."""
+    llm_recognizer = get_llm_recognizer()
+
+    if not llm_recognizer:
+        return {
+            "status": "unavailable",
+            "message": "LLM recognizer not found. Please ensure LLM fallback is enabled.",
+            "connected": False,
+            "enabled": False
+        }
+
+    # Get current connection status (cached)
+    connection_status = llm_recognizer.get_connection_status()
+
+    # Determine overall status
+    if connection_status["connected"]:
+        overall_status = "connected"
+    elif connection_status["enabled"]:
+        overall_status = "disconnected"
+    else:
+        overall_status = "disabled"
+
+    return {
+        "status": overall_status,
+        "connected": connection_status["connected"],
+        "enabled": connection_status["enabled"],
+        "has_client": connection_status["has_client"],
+        "has_api_key": connection_status["has_api_key"],
+        "has_base_url": connection_status["has_base_url"],
+        "has_model": connection_status["has_model"],
+        "model_name": connection_status.get("model_name"),
+        "provider": connection_status.get("provider"),
+        "last_health_check": connection_status["last_health_check"]
+    }
+
+
+@router.get("/status/llm/health")
+async def check_llm_health(
+    _auth: None = Depends(optional_admin_auth),
+) -> dict:
+    """Perform live LLM health check."""
+    llm_recognizer = get_llm_recognizer()
+
+    if not llm_recognizer:
+        return {
+            "status": "unavailable",
+            "message": "LLM recognizer not found. Please ensure LLM fallback is enabled.",
+            "connected": False,
+            "enabled": False
+        }
+
+    # Perform health check
+    health_result = await llm_recognizer.health_check()
+
+    # Determine overall status
+    if health_result["connected"]:
+        overall_status = "connected"
+    elif health_result["enabled"]:
+        overall_status = "disconnected"
+    else:
+        overall_status = "disabled"
+
+    # Build response with health check details
+    response = {
+        "status": overall_status,
+        "connected": health_result["connected"],
+        "enabled": health_result["enabled"],
+        "has_client": health_result["has_client"],
+        "has_api_key": health_result["has_api_key"],
+        "has_base_url": health_result["has_base_url"],
+        "has_model": health_result["has_model"],
+        "last_health_check": health_result["last_health_check"]
+    }
+
+    # Add optional fields
+    if "response_received" in health_result:
+        response["response_received"] = health_result["response_received"]
+
+    if health_result.get("error"):
+        response["error"] = health_result["error"]
+
+    return response
+
+
+# ============================================================================
+# Model Status Endpoints
+# ============================================================================
+
+from app.ml.embedding import get_embedding_model_status
+
+
+@router.get("/status/model", response_model=dict)
+async def get_model_status() -> dict:
+    """
+    Get vector embedding model loading status.
+    
+    Returns:
+        Dict containing model status information:
+        - loaded: Whether the model is loaded
+        - model_name: Model type name
+        - model_path: Model file path
+        - device: Device used for inference
+        - dimension: Embedding dimension
+        - initialized: Whether the model is initialized
+    """
+    status = get_embedding_model_status()
+    
+    # Add human-readable status message
+    status_message = "已加载" if status["loaded"] else "未加载"
+    if status["loaded"]:
+        if status["initialized"]:
+            status_message = f"已加载并初始化 ({status['model_name']})"
+        else:
+            status_message = f"已加载但未初始化 ({status['model_name']})"
+    
+    return {
+        **status,
+        "status_message": status_message
     }

@@ -16,17 +16,34 @@ from app.api.v1 import admin_router, intent_router
 from app.core import get_settings, cache_manager, get_async_log_service, get_recognizer_chain
 from app.core.log_service import set_session_maker
 from app.models import HealthResponse, ReadyResponse
-from app.models.database import Application, IntentCategory, IntentRule, AppIntent, IntentRecognitionLog
+from app.models.database import Application, IntentCategory, IntentRule, IntentRecognitionLog
 from app.services.config_service import ConfigService
 from app.services.recognizer import RecognizerChain
 from app.db import async_session_maker, dispose_engine
 from sqlalchemy import select, func
 
+# Ensure consistent logging format
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] [%(module)s] %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
 set_session_maker(async_session_maker)
+
+# Startup status tracking
+startup_status = {
+    "status": "initializing",
+    "phase": "starting",
+    "start_time": None,
+    "current_phase": "initializing",
+    "phases": [],
+    "is_complete": False
+}
 
 async def save_log_async(log_data: dict) -> None:
     """Save log entry asynchronously."""
@@ -37,15 +54,54 @@ async def save_log_async(log_data: dict) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    logger.info(f"Starting {settings.app_name} v{settings.app_version}")
+    import time
+    total_start_time = time.time()
+    
+    # 初始化启动状态
+    global startup_status
+    startup_status = {
+        "status": "initializing",
+        "phase": "starting",
+        "start_time": total_start_time,
+        "current_phase": "initializing",
+        "phases": [],
+        "is_complete": False
+    }
+    
+    logger.info(f"=== [START] Starting {settings.app_name} v{settings.app_version} ===")
+    
+    # 启动异步日志服务
+    startup_status["current_phase"] = "initializing_log_service"
+    startup_status["phases"].append({"phase": "initializing_log_service", "status": "starting", "timestamp": time.time()})
+    logger.info("=== [START] Initializing async log service ===")
+    log_start_time = time.time()
     async_log_service = get_async_log_service()
     await async_log_service.start()
+    log_end_time = time.time()
+    log_duration = (log_end_time - log_start_time) * 1000
+    startup_status["phases"].append({"phase": "initializing_log_service", "status": "completed", "timestamp": log_end_time, "duration": log_duration})
+    logger.info(f"=== [END] Async log service initialized (Duration: {log_duration:.2f}ms) ===")
+    
+    # 连接缓存管理器
+    startup_status["current_phase"] = "connecting_cache"
+    startup_status["phases"].append({"phase": "connecting_cache", "status": "starting", "timestamp": time.time()})
+    logger.info("=== [START] Connecting cache manager ===")
+    cache_start_time = time.time()
     await cache_manager.connect()
-    logger.info(f"Cache manager connected")
+    cache_end_time = time.time()
+    cache_duration = (cache_end_time - cache_start_time) * 1000
+    startup_status["phases"].append({"phase": "connecting_cache", "status": "completed", "timestamp": cache_end_time, "duration": cache_duration})
+    logger.info(f"=== [END] Cache manager connected (Duration: {cache_duration:.2f}ms) ===")
     
     # Preload models for better performance
     try:
-        logger.info("=== Preloading models... ===")
+        startup_status["current_phase"] = "preloading_models"
+        startup_status["phases"].append({"phase": "preloading_models", "status": "starting", "timestamp": time.time()})
+        logger.info("=== [START] Preloading models ===")
+        model_start_time = time.time()
+        
+        logger.info("Initializing recognizer chain...")
+        startup_status["current_phase"] = "initializing_recognizer"
         recognizer = await get_recognizer_chain()
         
         # Pre-build intent embeddings for semantic matching
@@ -53,30 +109,48 @@ async def lifespan(app: FastAPI):
         from sqlalchemy import select
         async with async_session_maker() as session:
             # Get all active categories and rules
+            startup_status["current_phase"] = "loading_categories"
+            logger.info("Loading active categories...")
+            categories_start_time = time.time()
             result = await session.execute(
                 select(IntentCategory).where(IntentCategory.is_active == True)
             )
             categories = result.scalars().all()
-            logger.info(f"Loaded {len(categories)} active categories")
+            categories_end_time = time.time()
+            categories_duration = (categories_end_time - categories_start_time) * 1000
+            logger.info(f"Loaded {len(categories)} active categories (Duration: {categories_duration:.2f}ms)")
             
+            startup_status["current_phase"] = "loading_rules"
+            logger.info("Loading active rules...")
+            rules_start_time = time.time()
             result = await session.execute(
                 select(IntentRule).where(IntentRule.is_active == True)
             )
             rules = result.scalars().all()
-            logger.info(f"Loaded {len(rules)} active rules")
+            rules_end_time = time.time()
+            rules_duration = (rules_end_time - rules_start_time) * 1000
+            logger.info(f"Loaded {len(rules)} active rules (Duration: {rules_duration:.2f}ms)")
             
             # Build embeddings for semantic recognizer
+            startup_status["current_phase"] = "building_embeddings"
+            logger.info("Checking recognizers...")
             for r in recognizer.recognizers:
-                logger.info(f"Checking recognizer: {r.recognizer_type}")
+                logger.info(f"Found recognizer: {r.recognizer_type}")
                 if r.recognizer_type == "semantic":
-                    logger.info(f"Building embeddings for semantic recognizer...")
+                    logger.info("Building embeddings for semantic recognizer...")
+                    embedding_start_time = time.time()
                     await r._build_intent_embeddings(categories, rules)
-                    logger.info(f"Built embeddings for {len(r._intent_embeddings)} intents")
+                    embedding_end_time = time.time()
+                    embedding_duration = (embedding_end_time - embedding_start_time) * 1000
+                    logger.info(f"Built embeddings for {len(r._intent_embeddings)} intents (Duration: {embedding_duration:.2f}ms)")
                     break
         
         # Check LLM connection status
         if settings.enable_llm_fallback:
-            logger.info("=== Checking LLM connection... ===")
+            startup_status["current_phase"] = "checking_llm"
+            startup_status["phases"].append({"phase": "checking_llm", "status": "starting", "timestamp": time.time()})
+            logger.info("=== [START] Checking LLM connection ===")
+            llm_start_time = time.time()
             from app.services.recognizer import LLMRecognizer
             llm_recognizer = LLMRecognizer()
             await llm_recognizer.initialize()
@@ -89,33 +163,64 @@ async def lifespan(app: FastAPI):
                         # 构建一个简单的测试提示
                         test_prompt = "Test connection"
                         # 尝试调用 LLM API
+                        test_start_time = time.time()
                         response = await llm_recognizer._call_llm(test_prompt)
+                        test_end_time = time.time()
+                        test_duration = (test_end_time - test_start_time) * 1000
                         if response:
-                            logger.info("LLM connection test successful")
+                            logger.info(f"LLM connection test successful (Duration: {test_duration:.2f}ms)")
                         else:
-                            logger.warning("LLM connection test returned no response")
+                            logger.warning(f"LLM connection test returned no response (Duration: {test_duration:.2f}ms)")
                     except Exception as e:
                         logger.warning(f"LLM connection test failed: {e}")
                 else:
                     logger.warning("LLM HTTP client not initialized")
             else:
                 logger.info("LLM recognizer disabled or not configured")
+            
+            llm_end_time = time.time()
+            llm_duration = (llm_end_time - llm_start_time) * 1000
+            startup_status["phases"].append({"phase": "checking_llm", "status": "completed", "timestamp": llm_end_time, "duration": llm_duration})
+            logger.info(f"=== [END] LLM connection check (Duration: {llm_duration:.2f}ms) ===")
         
-        logger.info("=== Models preloaded successfully ===")
+        model_end_time = time.time()
+        model_duration = (model_end_time - model_start_time) * 1000
+        startup_status["phases"].append({"phase": "preloading_models", "status": "completed", "timestamp": model_end_time, "duration": model_duration})
+        logger.info(f"=== [END] Models preloaded successfully (Total Duration: {model_duration:.2f}ms) ===")
     except Exception as e:
-        logger.warning(f"Failed to preload models: {e}")
+        logger.error(f"Failed to preload models: {e}")
         import traceback
         traceback.print_exc()
         logger.info("Models will load on first request")
+        startup_status["phases"].append({"phase": "preloading_models", "status": "failed", "timestamp": time.time(), "error": str(e)})
     
-    logger.info("Service started")
+    total_end_time = time.time()
+    total_duration = (total_end_time - total_start_time) * 1000
+    
+    # 更新启动状态为完成
+    startup_status["status"] = "completed"
+    startup_status["phase"] = "started"
+    startup_status["current_phase"] = "completed"
+    startup_status["is_complete"] = True
+    startup_status["total_duration"] = total_duration
+    startup_status["end_time"] = total_end_time
+    
+    logger.info(f"=== [END] Service started successfully (Total Startup Time: {total_duration:.2f}ms) ===")
+    
     yield
-    logger.info("Shutting down...")
+    
+    # Shutdown
+    logger.info("=== [START] Shutting down service ===")
+    shutdown_start_time = time.time()
+    
     async_log_service = get_async_log_service()
     await async_log_service.stop()
     await cache_manager.disconnect()
     await dispose_engine()
-    logger.info("Service stopped")
+    
+    shutdown_end_time = time.time()
+    shutdown_duration = (shutdown_end_time - shutdown_start_time) * 1000
+    logger.info(f"=== [END] Service stopped (Shutdown Time: {shutdown_duration:.2f}ms) ===")
 
 def create_app():
     """Create and configure FastAPI application."""
@@ -187,6 +292,23 @@ def create_app():
             "cache_ttl": settings.cache_ttl,
         }
 
+    @app.get("/api/ui/startup/status")
+    async def get_startup_status():
+        """Get startup status information."""
+        import time
+        current_time = time.time()
+        
+        # Calculate elapsed time if startup is in progress
+        if not startup_status.get("is_complete") and startup_status.get("start_time"):
+            elapsed_time = (current_time - startup_status["start_time"]) * 1000
+            startup_status["elapsed_time"] = elapsed_time
+        
+        # Add current timestamp for reference
+        response = startup_status.copy()
+        response["timestamp"] = current_time
+        
+        return response
+
     @app.get("/api/ui/llm/status")
     async def get_llm_status():
         """Get LLM connection status."""
@@ -244,7 +366,7 @@ def create_app():
             total_categories = await session.execute(
                 select(IntentCategory).where(IntentCategory.is_active == True)
             )
-            total_apps = await session.execute(select(AppIntent))
+            total_apps = await session.execute(select(Application))
 
             result = await session.execute(
                 select(IntentRecognitionLog).where(IntentRecognitionLog.created_at >= datetime.now() - timedelta(days=7))
@@ -347,16 +469,6 @@ def create_app():
             if not category:
                 raise HTTPException(status_code=404, detail="Category not found")
             return category
-
-    @app.get("/api/ui/apps")
-    async def get_apps():
-        async with async_session_maker() as session:
-            result = await session.execute(select(AppIntent))
-            apps = result.scalars().all()
-            return {
-                "items": apps,
-                "total": len(apps)
-            }
 
     @app.get("/api/ui/logs")
     async def get_logs(page: int = 1, page_size: int = 20):
@@ -549,56 +661,6 @@ def create_app():
             await session.delete(rule)
             await session.commit()
 
-    @app.post("/api/ui/apps")
-    async def create_app(data: dict):
-        async with async_session_maker() as session:
-            app = AppIntent(**data)
-            session.add(app)
-            await session.commit()
-            await session.refresh(app)
-            return app
-
-    @app.get("/api/ui/apps/{app_id}")
-    async def get_app(app_id: int):
-        async with async_session_maker() as session:
-            result = await session.execute(
-                select(AppIntent).where(AppIntent.id == app_id)
-            )
-            app = result.scalar_one_or_none()
-            if not app:
-                from fastapi import HTTPException, status
-                raise HTTPException(status_code=404, detail="App not found")
-            return app
-
-    @app.put("/api/ui/apps/{app_id}")
-    async def update_app(app_id: int, data: dict):
-        async with async_session_maker() as session:
-            result = await session.execute(
-                select(AppIntent).where(AppIntent.id == app_id)
-            )
-            app = result.scalar_one_or_none()
-            if not app:
-                from fastapi import HTTPException, status
-                raise HTTPException(status_code=404, detail="App not found")
-            for key, value in data.items():
-                if hasattr(app, key):
-                    setattr(app, key, value)
-            await session.commit()
-            return app
-
-    @app.delete("/api/ui/apps/{app_id}")
-    async def delete_app(app_id: int):
-        async with async_session_maker() as session:
-            result = await session.execute(
-                select(AppIntent).where(AppIntent.id == app_id)
-            )
-            app = result.scalar_one_or_none()
-            if not app:
-                from fastapi import HTTPException, status
-                raise HTTPException(status_code=404, detail="App not found")
-            await session.delete(app)
-            await session.commit()
-
     # Application management APIs
     @app.post("/api/ui/applications")
     async def create_application(data: dict):
@@ -609,7 +671,14 @@ def create_app():
                 app = await svc.create_application(
                     app_key=data["app_key"],
                     name=data["name"],
-                    description=data.get("description")
+                    description=data.get("description"),
+                    enable_keyword=data.get("enable_keyword", True),
+                    enable_regex=data.get("enable_regex", True),
+                    enable_semantic=data.get("enable_semantic", True),
+                    enable_llm_fallback=data.get("enable_llm_fallback", False),
+                    enable_cache=data.get("enable_cache", True),
+                    fallback_intent_code=data.get("fallback_intent_code"),
+                    confidence_threshold=data.get("confidence_threshold", 0.7)
                 )
                 await session.commit()
                 await session.refresh(app)
@@ -619,6 +688,13 @@ def create_app():
                     "name": app.name,
                     "description": app.description,
                     "is_active": app.is_active,
+                    "enable_keyword": app.enable_keyword,
+                    "enable_regex": app.enable_regex,
+                    "enable_semantic": app.enable_semantic,
+                    "enable_llm_fallback": app.enable_llm_fallback,
+                    "enable_cache": app.enable_cache,
+                    "fallback_intent_code": app.fallback_intent_code,
+                    "confidence_threshold": app.confidence_threshold,
                     "created_at": app.created_at,
                     "updated_at": app.updated_at
                 }
@@ -654,6 +730,13 @@ def create_app():
                         "name": app.name,
                         "description": app.description,
                         "is_active": app.is_active,
+                        "enable_keyword": app.enable_keyword,
+                        "enable_regex": app.enable_regex,
+                        "enable_semantic": app.enable_semantic,
+                        "enable_llm_fallback": app.enable_llm_fallback,
+                        "enable_cache": app.enable_cache,
+                        "fallback_intent_code": app.fallback_intent_code,
+                        "confidence_threshold": app.confidence_threshold,
                         "created_at": app.created_at,
                         "updated_at": app.updated_at
                     }
@@ -675,6 +758,34 @@ def create_app():
             await session.commit()
             return {"success": True}
 
+    @app.get("/api/ui/applications/{application_id}")
+    async def get_application(application_id: int):
+        from fastapi import HTTPException
+        async with async_session_maker() as session:
+            result = await session.execute(
+                select(Application).where(Application.id == application_id)
+            )
+            app = result.scalar_one_or_none()
+            if not app:
+                raise HTTPException(status_code=404, detail="Application not found")
+
+            return {
+                "id": app.id,
+                "app_key": app.app_key,
+                "name": app.name,
+                "description": app.description,
+                "is_active": app.is_active,
+                "enable_keyword": app.enable_keyword,
+                "enable_regex": app.enable_regex,
+                "enable_semantic": app.enable_semantic,
+                "enable_llm_fallback": app.enable_llm_fallback,
+                "enable_cache": app.enable_cache,
+                "fallback_intent_code": app.fallback_intent_code,
+                "confidence_threshold": app.confidence_threshold,
+                "created_at": app.created_at,
+                "updated_at": app.updated_at
+            }
+
     @app.put("/api/ui/applications/{application_id}")
     async def update_application(application_id: int, data: dict):
         from fastapi import HTTPException
@@ -685,23 +796,44 @@ def create_app():
             app = result.scalar_one_or_none()
             if not app:
                 raise HTTPException(status_code=404, detail="Application not found")
-            
+
             if "name" in data:
                 app.name = data["name"]
             if "description" in data:
                 app.description = data["description"]
             if "is_active" in data:
                 app.is_active = data["is_active"]
-            
+            if "enable_keyword" in data:
+                app.enable_keyword = data["enable_keyword"]
+            if "enable_regex" in data:
+                app.enable_regex = data["enable_regex"]
+            if "enable_semantic" in data:
+                app.enable_semantic = data["enable_semantic"]
+            if "enable_llm_fallback" in data:
+                app.enable_llm_fallback = data["enable_llm_fallback"]
+            if "enable_cache" in data:
+                app.enable_cache = data["enable_cache"]
+            if "fallback_intent_code" in data:
+                app.fallback_intent_code = data["fallback_intent_code"]
+            if "confidence_threshold" in data:
+                app.confidence_threshold = data["confidence_threshold"]
+
             await session.commit()
             await session.refresh(app)
-            
+
             return {
                 "id": app.id,
                 "app_key": app.app_key,
                 "name": app.name,
                 "description": app.description,
                 "is_active": app.is_active,
+                "enable_keyword": app.enable_keyword,
+                "enable_regex": app.enable_regex,
+                "enable_semantic": app.enable_semantic,
+                "enable_llm_fallback": app.enable_llm_fallback,
+                "enable_cache": app.enable_cache,
+                "fallback_intent_code": app.fallback_intent_code,
+                "confidence_threshold": app.confidence_threshold,
                 "created_at": app.created_at,
                 "updated_at": app.updated_at
             }
@@ -807,75 +939,76 @@ def create_app():
                 )
 
             if request.app_key:
-                config_service = ConfigService(async_session_maker)
-                context = await config_service.get_app_intent_context(request.app_key)
+                async with async_session_maker() as session:
+                    config_service = ConfigService(session)
+                    context = await config_service.get_app_intent_context(request.app_key)
 
-                if not context:
-                    return UITestResponse(
-                        intent=None,
-                        confidence=0.0,
-                        matchedRules=[],
-                        recognizer_type=None,
-                        processingTimeMs=0.0,
-                        message=f"No configuration found for app: {request.app_key}"
+                    if not context:
+                        return UITestResponse(
+                            intent=None,
+                            confidence=0.0,
+                            matchedRules=[],
+                            recognizer_type=None,
+                            processingTimeMs=0.0,
+                            message=f"No configuration found for app: {request.app_key}"
+                        )
+
+                    result = await recognizer.recognize(
+                        request.text,
+                        context["categories"],
+                        context["rules"]
                     )
 
-                result = await recognizer.recognize(
-                    request.text,
-                    context["categories"],
-                    context["rules"]
-                )
-
-                # Try LLM fallback if no match found
-                if result is None:
-                    logger.info("No match found in UI test, attempting LLM fallback")
-                    from app.core.config import get_settings
-                    settings = get_settings()
-                    
-                    if settings.enable_llm_fallback:
-                        # Get app config
-                        app_config = context.get("app_config")
-                        categories = context.get("categories", [])
+                    # Try LLM fallback if no match found
+                    if result is None:
+                        logger.info("No match found in UI test, attempting LLM fallback")
+                        from app.core.config import get_settings
+                        settings = get_settings()
                         
-                        # Try LLM fallback
-                        llm_result = await try_llm_fallback(
-                            text=request.text,
-                            categories=categories,
-                            app_config=app_config,
-                            previous_chain=getattr(recognizer, 'last_chain', [])
-                        )
-                        
-                        if llm_result:
-                            result = llm_result
-                            logger.info(f"LLM fallback used in UI test: {result.intent}")
+                        if settings.enable_llm_fallback:
+                            # Get app config
+                            app_config = context.get("app_config")
+                            categories = context.get("categories", [])
+                            
+                            # Try LLM fallback
+                            llm_result = await try_llm_fallback(
+                                text=request.text,
+                                categories=categories,
+                                app_config=app_config,
+                                previous_chain=getattr(recognizer, 'last_chain', [])
+                            )
+                            
+                            if llm_result:
+                                result = llm_result
+                                logger.info(f"LLM fallback used in UI test: {result.intent}")
 
-                if result is None:
-                    return UITestResponse(
-                        intent=None,
-                        confidence=0.0,
-                        matchedRules=[],
-                        recognizer_type=None,
-                        processingTimeMs=0.0,
-                        message="No intent matched. Please check your rules and categories configuration."
-                    )
-
-                log_data = {
-                    "app_key": request.app_key,
-                    "input_text": request.text,
-                    "recognized_intent": result.intent,
-                    "confidence": result.confidence,
-                    "matched_rules": [
-                        MatchedRule(
-                            id=r.id,
-                            rule_type=r.rule_type,
-                            content=r.content,
-                            weight=r.weight
+                    if result is None:
+                        return UITestResponse(
+                            intent=None,
+                            confidence=0.0,
+                            matchedRules=[],
+                            recognizer_type=None,
+                            processingTimeMs=0.0,
+                            message="No intent matched. Please check your rules and categories configuration."
                         )
-                        for r in result.matched_rules
-                    ],
-                    "execution_time_ms": (perf_counter() - start_time) * 1000,
-                    "recognizer_type": result.recognizer_type,
-                }
+
+                    log_data = {
+                        "app_key": request.app_key,
+                        "input_text": request.text,
+                        "recognized_intent": result.intent,
+                        "confidence": result.confidence,
+                        "matched_rules": [
+                            MatchedRule(
+                                id=r.id,
+                                rule_type=r.rule_type,
+                                content=r.content,
+                                weight=r.weight
+                            )
+                            for r in result.matched_rules
+                        ],
+                        "processing_time_ms": (perf_counter() - start_time) * 1000,
+                        "is_success": True,
+                    }
             else:
                 async with async_session_maker() as session:
                     all_categories_result = await session.execute(
@@ -932,8 +1065,8 @@ def create_app():
                         )
                         for r in result.matched_rules
                     ],
-                    "execution_time_ms": (perf_counter() - start_time) * 1000,
-                    "recognizer_type": result.recognizer_type,
+                    "processing_time_ms": (perf_counter() - start_time) * 1000,
+                    "is_success": True,
                 }
 
             if log_data:

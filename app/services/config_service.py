@@ -1,15 +1,52 @@
 """Configuration service for intent management."""
 import asyncio
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.database import AppIntent, Application, IntentCategory, IntentRule
+from app.models.database import Application, IntentCategory, IntentRule
 
 logger = logging.getLogger(__name__)
+
+
+def _generate_regex_from_category(name: str, code: str) -> str:
+    """Generate a regex pattern from category name and code.
+    
+    Args:
+        name: Category display name (e.g., "BOM查询")
+        code: Category code (e.g., "bom.query")
+        
+    Returns:
+        A regex pattern that matches variations of the category name/code
+    """
+    patterns = []
+    
+    # Extract key terms from name (split by spaces, underscores, dots)
+    key_terms = re.split(r'[\s._-]+', name)
+    key_terms.extend(re.split(r'[\s._-]+', code))
+    
+    # Remove empty strings and deduplicate
+    key_terms = list(set(term for term in key_terms if term))
+    
+    if not key_terms:
+        return name
+    
+    # Create pattern from each key term
+    for term in key_terms:
+        # Escape special regex characters
+        escaped_term = re.escape(term)
+        # Make it match the term with optional surrounding text
+        patterns.append(escaped_term)
+    
+    # Combine patterns with OR
+    if len(patterns) == 1:
+        return f".*{patterns[0]}.*"
+    else:
+        return f".*({'|'.join(patterns)}).*"
 
 
 class CacheEntry:
@@ -83,16 +120,6 @@ class ConfigService:
         self.app_cache = LRUCache(max_size=100, ttl_seconds=300)
         self.context_cache = LRUCache(max_size=100, ttl_seconds=300)
 
-    async def get_app_config(
-        self,
-        app_key: str,
-    ) -> Optional[AppIntent]:
-        """Get app configuration by app key."""
-        result = await self.db.execute(
-            select(AppIntent).where(AppIntent.app_key == app_key)
-        )
-        return result.scalar_one_or_none()
-
     async def get_application_by_key(
         self,
         app_key: str,
@@ -147,7 +174,7 @@ class ConfigService:
         Get complete context for intent recognition with application binding.
 
         Returns:
-            Dict with application, app config, categories, and rules
+            Dict with application, categories, and rules
         """
         context_key = f"context:{app_key}"
         cached = await self.context_cache.get(context_key)
@@ -157,14 +184,6 @@ class ConfigService:
 
             if not application:
                 logger.warning(f"Application not found: {app_key}")
-                logger.warning(f"This may cause 'app config not found' errors for requests using app_key='{app_key}'")
-                return None
-
-            app_config = await self.get_app_config(app_key)
-
-            if not app_config:
-                logger.warning(f"No configuration found for app: {app_key}")
-                logger.warning(f"This may cause 'app config not found' errors for requests using app_key='{app_key}'")
                 return None
 
             categories = await self.get_categories_by_application(
@@ -175,14 +194,12 @@ class ConfigService:
 
             if not category_ids:
                 logger.warning(f"No active categories found for app: {app_key}")
-                logger.warning(f"This may cause 'app config not found' errors for requests using app_key='{app_key}'")
                 return None
 
             rules = await self.get_active_rules(category_ids)
 
             context = {
                 "application": application,
-                "app_config": app_config,
                 "categories": categories,
                 "rules": rules,
             }
@@ -214,6 +231,20 @@ class ConfigService:
         )
         self.db.add(category)
         await self.db.flush()
+        
+        # Auto-generate regex rule for the category
+        regex_pattern = _generate_regex_from_category(name, code)
+        rule = IntentRule(
+            category_id=category.id,
+            rule_type="regex",
+            content=regex_pattern,
+            weight=0.8,
+            enabled=True,
+        )
+        self.db.add(rule)
+        await self.db.flush()
+        logger.info(f"Auto-generated regex rule for category '{name}': {regex_pattern}")
+        
         return category
 
     async def update_category(
@@ -259,6 +290,7 @@ class ConfigService:
         rule_type: str,
         content: str,
         weight: float = 1.0,
+        enabled: bool = True,
     ) -> IntentRule:
         """Create new intent rule."""
         rule = IntentRule(
@@ -266,6 +298,7 @@ class ConfigService:
             rule_type=rule_type,
             content=content,
             weight=weight,
+            enabled=enabled,
         )
         self.db.add(rule)
         await self.db.flush()
@@ -295,11 +328,8 @@ class ConfigService:
         return rule
 
     async def delete_rule(self, rule_id: int) -> bool:
-        """Delete intent rule."""
-        result = await self.db.execute(
-            select(IntentRule).where(IntentRule.id == rule_id)
-        )
-        rule = result.scalar_one_or_none()
+        """Delete an intent rule."""
+        rule = await self.db.get(IntentRule, rule_id)
 
         if not rule:
             return False
@@ -307,55 +337,6 @@ class ConfigService:
         await self.db.delete(rule)
         await self.db.flush()
         await self.context_cache.invalidate()
-        return True
-
-    async def create_app_config(
-        self,
-        app_key: str,
-        intent_ids: List[int],
-        confidence_threshold: float = 0.7,
-        **kwargs,
-    ) -> AppIntent:
-        """Create new app configuration."""
-        app_config = AppIntent(
-            app_key=app_key,
-            intent_ids=intent_ids,
-            confidence_threshold=confidence_threshold,
-            **kwargs,
-        )
-        self.db.add(app_config)
-        await self.db.flush()
-        await self.context_cache.invalidate()
-        return app_config
-
-    async def update_app_config(
-        self,
-        app_key: str,
-        **kwargs,
-    ) -> Optional[AppIntent]:
-        """Update app configuration."""
-        app_config = await self.get_app_config(app_key)
-
-        if not app_config:
-            return None
-
-        for key, value in kwargs.items():
-            if hasattr(app_config, key):
-                setattr(app_config, key, value)
-
-        await self.db.flush()
-        await self.context_cache.invalidate()
-        return app_config
-
-    async def delete_app_config(self, app_key: str) -> bool:
-        """Delete app configuration."""
-        app_config = await self.get_app_config(app_key)
-
-        if not app_config:
-            return False
-
-        await self.db.delete(app_config)
-        await self.db.flush()
         return True
 
     async def list_categories(
@@ -400,28 +381,31 @@ class ConfigService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def list_app_configs(
-        self,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> List[AppIntent]:
-        """List app configurations."""
-        query = select(AppIntent).offset(offset).limit(limit)
-
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
-
     async def create_application(
         self,
         app_key: str,
         name: str,
         description: Optional[str] = None,
+        enable_keyword: bool = True,
+        enable_regex: bool = True,
+        enable_semantic: bool = True,
+        enable_llm_fallback: bool = False,
+        enable_cache: bool = True,
+        fallback_intent_code: Optional[str] = None,
+        confidence_threshold: float = 0.7,
     ) -> Application:
         """Create new application."""
         app = Application(
             app_key=app_key,
             name=name,
             description=description,
+            enable_keyword=enable_keyword,
+            enable_regex=enable_regex,
+            enable_semantic=enable_semantic,
+            enable_llm_fallback=enable_llm_fallback,
+            enable_cache=enable_cache,
+            fallback_intent_code=fallback_intent_code,
+            confidence_threshold=confidence_threshold,
         )
         self.db.add(app)
         await self.db.flush()
@@ -458,6 +442,28 @@ class ConfigService:
         await self.db.flush()
         await self.context_cache.invalidate()
         return True
+
+    async def update_application(
+        self,
+        application_id: int,
+        **kwargs,
+    ) -> Optional[Application]:
+        """Update application fields."""
+        result = await self.db.execute(
+            select(Application).where(Application.id == application_id)
+        )
+        app = result.scalar_one_or_none()
+
+        if not app:
+            return None
+
+        for key, value in kwargs.items():
+            if hasattr(app, key) and value is not None:
+                setattr(app, key, value)
+
+        await self.db.flush()
+        await self.context_cache.invalidate()
+        return app
 
     async def get_categories_by_application(
         self,

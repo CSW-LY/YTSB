@@ -153,11 +153,11 @@ class SemanticRecognizer(IntentRecognizer):
     ) -> None:
         """Build embeddings for all semantic rules using batch encoding."""
         category_map = {c.id: c for c in categories}
-        
+
         # Collect all semantic rules
         semantic_rules = []
         for rule in rules:
-            if rule.rule_type != "semantic" or not rule.is_active:
+            if rule.rule_type != "semantic" or not rule.is_active or not rule.enabled:
                 continue
 
             category = category_map.get(rule.category_id)
@@ -183,7 +183,7 @@ class SemanticRecognizer(IntentRecognizer):
                 self._intent_embeddings[category.id].append(
                     (embeddings[i], rule.weight)
                 )
-            
+
             logger.info(f"Successfully encoded {len(semantic_rules)} semantic rules")
         except Exception as e:
             logger.error(f"Failed to batch encode semantic rules: {e}")

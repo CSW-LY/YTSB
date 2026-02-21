@@ -282,6 +282,20 @@
                 <div class="stat-card"><h3>应用数</h3><div class="value" id="statApps">-</div></div>
                 <div class="stat-card"><h3>缓存状态</h3><div class="value" id="statCache">-</div></div>
             </div>
+
+            <h3 style="margin-top: 30px; margin-bottom: 15px;">系统状态</h3>
+            <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+                <div class="stat-card" id="vectorModelCard">
+                    <h3>向量模型</h3>
+                    <div class="value" id="vectorModelStatus" style="color: #6c757d;">-</div>
+                    <div id="vectorModelDetails" style="font-size: 12px; color: #6c757d; margin-top: 5px;">-</div>
+                </div>
+                <div class="stat-card" id="llmCard">
+                    <h3>LLM连接</h3>
+                    <div class="value" id="llmStatus" style="color: #6c757d;">-</div>
+                    <div id="llmDetails" style="font-size: 12px; color: #6c757d; margin-top: 5px;">-</div>
+                </div>
+            </div>
             
             <h3 style="margin-top: 30px; margin-bottom: 15px;">意图识别统计(最近24小时)</h3>
             <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
@@ -350,11 +364,12 @@
                             <th style="padding: 10px; border: 1px solid #ddd;">内容</th>
                             <th style="padding: 10px; border: 1px solid #ddd;">分类</th>
                             <th style="padding: 10px; border: 1px solid #ddd;">权重</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">状态</th>
                             <th style="padding: 10px; border: 1px solid #ddd;">操作</th>
                         </tr>
                     </thead>
                     <tbody id="rulesTableBody">
-                        <tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd;">正在加载规则...</td></tr>
+                        <tr><td colspan="7" style="padding: 20px; text-align: center; border: 1px solid #ddd;">正在加载规则...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -434,6 +449,7 @@
                             <th style="padding: 10px; border: 1px solid #ddd;">应用密钥</th>
                             <th style="padding: 10px; border: 1px solid #ddd;">名称</th>
                             <th style="padding: 10px; border: 1px solid #ddd;">描述</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">策略配置</th>
                             <th style="padding: 10px; border: 1px solid #ddd;">状态</th>
                             <th style="padding: 10px; border: 1px solid #ddd;">操作</th>
                         </tr>
@@ -680,6 +696,27 @@
                     <label>应用描述</label>
                     <input type="text" id="newApplicationDescription" placeholder="请输入应用描述...">
                 </div>
+                <div class="form-group" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+                    <label style="font-size: 16px; margin-bottom: 15px;">规则策略配置</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div>
+                            <input type="checkbox" id="newEnableKeywordMatching" checked>
+                            <label for="newEnableKeywordMatching" style="font-weight: normal; display: inline;">启用关键词匹配</label>
+                        </div>
+                        <div>
+                            <input type="checkbox" id="newEnableRegexMatching" checked>
+                            <label for="newEnableRegexMatching" style="font-weight: normal; display: inline;">启用正则表达式匹配</label>
+                        </div>
+                        <div>
+                            <input type="checkbox" id="newEnableSemanticMatching" checked>
+                            <label for="newEnableSemanticMatching" style="font-weight: normal; display: inline;">启用语义匹配</label>
+                        </div>
+                        <div>
+                            <input type="checkbox" id="newEnableLLMFallback" checked>
+                            <label for="newEnableLLMFallback" style="font-weight: normal; display: inline;">启用LLM兜底</label>
+                        </div>
+                    </div>
+                </div>
                 <div class="modal-footer">
                     <button class="btn" onclick="saveNewApplication()">保存应用</button>
                     <button class="btn" onclick="hideAddApplicationForm()" style="background: #6c757d;">取消</button>
@@ -706,6 +743,27 @@
                 <div class="form-group">
                     <label>状态</label>
                     <input type="checkbox" id="editApplicationIsActive"> 激活
+                </div>
+                <div class="form-group" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee;">
+                    <label style="font-size: 16px; margin-bottom: 15px;">规则策略配置</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div>
+                            <input type="checkbox" id="enableKeywordMatching"> 
+                            <label for="enableKeywordMatching" style="font-weight: normal; display: inline;">启用关键词匹配</label>
+                        </div>
+                        <div>
+                            <input type="checkbox" id="enableRegexMatching"> 
+                            <label for="enableRegexMatching" style="font-weight: normal; display: inline;">启用正则表达式匹配</label>
+                        </div>
+                        <div>
+                            <input type="checkbox" id="enableSemanticMatching"> 
+                            <label for="enableSemanticMatching" style="font-weight: normal; display: inline;">启用语义匹配</label>
+                        </div>
+                        <div>
+                            <input type="checkbox" id="enableLLMFallback"> 
+                            <label for="enableLLMFallback" style="font-weight: normal; display: inline;">启用LLM兜底</label>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn" onclick="saveEditApplication()">保存更改</button>
@@ -790,7 +848,10 @@
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.getElementById(name + 'Panel').classList.add('active');
             event.target.classList.add('active');
-            if (name === 'monitor') loadStats();
+            if (name === 'monitor') {
+                loadStats();
+                loadSystemStatus();
+            }
             if (name === 'rules') loadRules();
             if (name === 'categories') loadCategoriesList();
             if (name === 'apps') loadAppsList();
@@ -1116,7 +1177,7 @@
             const pageSize = document.getElementById('pageSize').value;
             const tableBody = document.getElementById('rulesTableBody');
             
-            tableBody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd;">正在加载规则...</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center; border: 1px solid #ddd;">正在加载规则...</td></tr>';
             
             try {
                 // 构建查询参数
@@ -1149,10 +1210,11 @@
                 // 填充表格
                 tableBody.innerHTML = '';
                 if (rules.length === 0) {
-                    tableBody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd;">未找到规则</td></tr>';
+                    tableBody.innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center; border: 1px solid #ddd;">未找到规则</td></tr>';
                 } else {
                     rules.forEach(rule => {
                         const category = categories.find(c => c.id === rule.category_id) || { name: '未知', code: 'unknown' };
+                        const isEnabled = rule.is_enabled !== undefined ? rule.is_enabled : true;
                         const row = document.createElement('tr');
                         row.innerHTML = `
                             <td style="padding: 10px; border: 1px solid #ddd;">${rule.id}</td>
@@ -1160,6 +1222,12 @@
                             <td style="padding: 10px; border: 1px solid #ddd;">${rule.content}</td>
                             <td style="padding: 10px; border: 1px solid #ddd;">${category.name} (${category.code})</td>
                             <td style="padding: 10px; border: 1px solid #ddd;">${rule.weight}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">
+                                <label class="switch" style="display: inline-flex; align-items: center; margin: 0;">
+                                    <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="toggleRuleStatus(${rule.id}, this.checked)" style="margin: 0; cursor: pointer;">
+                                    <span style="margin-left: 5px; font-size: 12px;">${isEnabled ? '启用' : '禁用'}</span>
+                                </label>
+                            </td>
                             <td style="padding: 10px; border: 1px solid #ddd;">
                                 <button class="btn" style="padding: 5px 10px; font-size: 12px;" onclick="editRule(${rule.id})">编辑</button>
                                 <button class="btn" style="padding: 5px 10px; font-size: 12px; background: #dc3545;" onclick="deleteRule(${rule.id})">删除</button>
@@ -1170,7 +1238,7 @@
                 }
             } catch (error) {
                 console.error('加载规则失败:', error);
-                tableBody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd; color: #dc3545;">加载规则失败</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center; border: 1px solid #ddd; color: #dc3545;">加载规则失败</td></tr>';
             }
         }
         
@@ -1727,12 +1795,20 @@
             document.getElementById('newApplicationKey').value = '';
             document.getElementById('newApplicationName').value = '';
             document.getElementById('newApplicationDescription').value = '';
+            document.getElementById('newEnableKeywordMatching').checked = true;
+            document.getElementById('newEnableRegexMatching').checked = true;
+            document.getElementById('newEnableSemanticMatching').checked = true;
+            document.getElementById('newEnableLLMFallback').checked = true;
         }
 
         async function saveNewApplication() {
             const appKey = document.getElementById('newApplicationKey').value;
             const name = document.getElementById('newApplicationName').value;
             const description = document.getElementById('newApplicationDescription').value;
+            const enableKeyword = document.getElementById('newEnableKeywordMatching').checked;
+            const enableRegex = document.getElementById('newEnableRegexMatching').checked;
+            const enableSemantic = document.getElementById('newEnableSemanticMatching').checked;
+            const enableLLMFallback = document.getElementById('newEnableLLMFallback').checked;
             const resultDiv = document.getElementById('addApplicationResult');
 
             if (!appKey.trim() || !name.trim()) {
@@ -1751,7 +1827,11 @@
                     body: JSON.stringify({
                         app_key: appKey,
                         name: name,
-                        description: description
+                        description: description,
+                        enable_keyword: enableKeyword,
+                        enable_regex: enableRegex,
+                        enable_semantic: enableSemantic,
+                        enable_llm_fallback: enableLLMFallback
                     })
                 });
 
@@ -1787,10 +1867,15 @@
                 document.getElementById('editApplicationName').value = app.name || '';
                 document.getElementById('editApplicationDescription').value = app.description || '';
                 document.getElementById('editApplicationIsActive').checked = app.is_active;
-                
+
+                document.getElementById('enableKeywordMatching').checked = app.enable_keyword !== undefined ? app.enable_keyword : true;
+                document.getElementById('enableRegexMatching').checked = app.enable_regex !== undefined ? app.enable_regex : true;
+                document.getElementById('enableSemanticMatching').checked = app.enable_semantic !== undefined ? app.enable_semantic : true;
+                document.getElementById('enableLLMFallback').checked = app.enable_llm_fallback !== undefined ? app.enable_llm_fallback : true;
+
                 document.getElementById('editApplicationResult').classList.add('hidden');
                 document.getElementById('editApplicationResult').className = 'result hidden';
-                
+
                 showEditApplicationForm();
             } catch (error) {
                 console.error('获取应用信息失败:', error);
@@ -1803,6 +1888,10 @@
             const name = document.getElementById('editApplicationName').value;
             const description = document.getElementById('editApplicationDescription').value;
             const isActive = document.getElementById('editApplicationIsActive').checked;
+            const enableKeyword = document.getElementById('enableKeywordMatching').checked;
+            const enableRegex = document.getElementById('enableRegexMatching').checked;
+            const enableSemantic = document.getElementById('enableSemanticMatching').checked;
+            const enableLLMFallback = document.getElementById('enableLLMFallback').checked;
             const resultDiv = document.getElementById('editApplicationResult');
             
             if (!name.trim()) {
@@ -1823,7 +1912,11 @@
                     body: JSON.stringify({
                         name: name,
                         description: description,
-                        is_active: isActive
+                        is_active: isActive,
+                        enable_keyword: enableKeyword,
+                        enable_regex: enableRegex,
+                        enable_semantic: enableSemantic,
+                        enable_llm_fallback: enableLLMFallback
                     })
                 });
                 
@@ -2155,7 +2248,7 @@
             const pageSize = document.getElementById('applicationPageSize').value;
             const tableBody = document.getElementById('applicationsTableBody');
 
-            tableBody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd;">正在加载应用...</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center; border: 1px solid #ddd;">正在加载应用...</td></tr>';
 
             try {
                 // 构建查询参数
@@ -2178,15 +2271,42 @@
                 // 填充表格
                 tableBody.innerHTML = '';
                 if (applicationsList.length === 0) {
-                    tableBody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd;">未找到应用</td></tr>';
+                    tableBody.innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center; border: 1px solid #ddd;">未找到应用</td></tr>';
                 } else {
                     applicationsList.forEach(app => {
                         const row = document.createElement('tr');
+                        
+                        const strategyConfig = `
+                            <div style="display: flex; flex-direction: column; gap: 3px; font-size: 12px;">
+                                <div>
+                                    <span style="color: ${app.enable_keyword ? '#28a745' : '#6c757d'};">
+                                        ${app.enable_keyword ? '✓' : '✗'} 关键词
+                                    </span>
+                                </div>
+                                <div>
+                                    <span style="color: ${app.enable_regex ? '#28a745' : '#6c757d'};">
+                                        ${app.enable_regex ? '✓' : '✗'} 正则
+                                    </span>
+                                </div>
+                                <div>
+                                    <span style="color: ${app.enable_semantic ? '#28a745' : '#6c757d'};">
+                                        ${app.enable_semantic ? '✓' : '✗'} 语义
+                                    </span>
+                                </div>
+                                <div>
+                                    <span style="color: ${app.enable_llm_fallback ? '#ffc107' : '#6c757d'};">
+                                        ${app.enable_llm_fallback ? '✓' : '✗'} LLM兜底
+                                    </span>
+                                </div>
+                            </div>
+                        `;
+                        
                         row.innerHTML = `
                             <td style="padding: 10px; border: 1px solid #ddd;">${app.id}</td>
                             <td style="padding: 10px; border: 1px solid #ddd;">${app.app_key}</td>
                             <td style="padding: 10px; border: 1px solid #ddd;">${app.name}</td>
                             <td style="padding: 10px; border: 1px solid #ddd;">${app.description || '-'}</td>
+                            <td style="padding: 10px; border: 1px solid #ddd;">${strategyConfig}</td>
                             <td style="padding: 10px; border: 1px solid #ddd;">${app.is_active ? '激活' : '停用'}</td>
                             <td style="padding: 10px; border: 1px solid #ddd;">
                                 <button class="btn" style="padding: 5px 10px; font-size: 12px;" onclick="editApplication(${app.id})">编辑</button>
@@ -2202,7 +2322,7 @@
                 applicationsLoaded = true;
             } catch (error) {
                 console.error('加载应用失败:', error);
-                tableBody.innerHTML = '<tr><td colspan="6" style="padding: 20px; text-align: center; border: 1px solid #ddd; color: #dc3545;">加载应用失败</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center; border: 1px solid #ddd; color: #dc3545;">加载应用失败</td></tr>';
             }
         }
 
@@ -2470,13 +2590,136 @@
                 await loadRules();
                 await loadCategoriesList();
                 await loadApiKeysList();
+                loadSystemStatus();
             } catch (error) {
                 console.error('初始化失败:', error);
             }
         }
         
+        // 加载系统状态（向量模型和LLM）
+        async function loadSystemStatus() {
+            await loadVectorModelStatus();
+            await loadLLMStatus();
+        }
+
+        // 加载向量模型状态
+        async function loadVectorModelStatus() {
+            try {
+                const response = await fetch('/api/v1/admin/status/model');
+                if (!response.ok) {
+                    throw new Error('获取向量模型状态失败');
+                }
+                const data = await response.json();
+                
+                const statusElement = document.getElementById('vectorModelStatus');
+                const detailsElement = document.getElementById('vectorModelDetails');
+                const cardElement = document.getElementById('vectorModelCard');
+                
+                if (data.loaded) {
+                    statusElement.textContent = '已加载';
+                    statusElement.style.color = '#28a745';
+                    detailsElement.textContent = `模型: ${data.model_name || '未知'} | 嵌入维度: ${data.dimension || '未知'}`;
+                    cardElement.style.background = '#d4edda';
+                } else {
+                    statusElement.textContent = '未加载';
+                    statusElement.style.color = '#dc3545';
+                    detailsElement.textContent = '向量模型尚未加载';
+                    cardElement.style.background = '#f8d7da';
+                }
+            } catch (error) {
+                console.error('加载向量模型状态失败:', error);
+                document.getElementById('vectorModelStatus').textContent = '错误';
+                document.getElementById('vectorModelStatus').style.color = '#dc3545';
+                document.getElementById('vectorModelDetails').textContent = '无法获取状态';
+                document.getElementById('vectorModelCard').style.background = '#f8d7da';
+            }
+        }
+
+        // 加载LLM连接状态
+        async function loadLLMStatus() {
+            try {
+                const response = await fetch('/api/v1/admin/status/llm');
+                if (!response.ok) {
+                    throw new Error('获取LLM状态失败');
+                }
+                const data = await response.json();
+                
+                const statusElement = document.getElementById('llmStatus');
+                const detailsElement = document.getElementById('llmDetails');
+                const cardElement = document.getElementById('llmCard');
+                
+                if (data.connected) {
+                    statusElement.textContent = '已连接';
+                    statusElement.style.color = '#28a745';
+                    detailsElement.textContent = `模型: ${data.model_name || '未知'} | 提供商: ${data.provider || '未知'}`;
+                    cardElement.style.background = '#d4edda';
+                } else {
+                    statusElement.textContent = '未连接';
+                    statusElement.style.color = '#dc3545';
+                    detailsElement.textContent = 'LLM未配置或连接失败';
+                    cardElement.style.background = '#f8d7da';
+                }
+            } catch (error) {
+                console.error('加载LLM状态失败:', error);
+                document.getElementById('llmStatus').textContent = '错误';
+                document.getElementById('llmStatus').style.color = '#dc3545';
+                document.getElementById('llmDetails').textContent = '无法获取状态';
+                document.getElementById('llmCard').style.background = '#f8d7da';
+            }
+        }
+
+        // 切换规则启用/禁用状态
+        async function toggleRuleStatus(ruleId, isEnabled) {
+            try {
+                const endpoint = isEnabled ? `/api/v1/admin/rules/${ruleId}/enable` : `/api/v1/admin/rules/${ruleId}/disable`;
+                const response = await fetch(endpoint, {
+                    method: 'PUT'
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || '更新规则状态失败');
+                }
+                
+                console.log(`规则 ${ruleId} 已${isEnabled ? '启用' : '禁用'}`);
+            } catch (error) {
+                console.error('更新规则状态失败:', error);
+                alert(`更新规则状态失败: ${error.message}`);
+                loadRules();
+            }
+        }
+
         // 页面加载完成后初始化
         window.onload = init;
+
+        // 定时更新系统状态（每30秒）
+        let statusUpdateInterval;
+        
+        function startStatusAutoUpdate() {
+            if (statusUpdateInterval) {
+                clearInterval(statusUpdateInterval);
+            }
+            statusUpdateInterval = setInterval(() => {
+                loadSystemStatus();
+            }, 30000);
+        }
+
+        function stopStatusAutoUpdate() {
+            if (statusUpdateInterval) {
+                clearInterval(statusUpdateInterval);
+                statusUpdateInterval = null;
+            }
+        }
+
+        // 页面加载时启动自动更新
+        window.addEventListener('load', () => {
+            startStatusAutoUpdate();
+        });
+
+        // 页面卸载时停止自动更新
+        window.addEventListener('beforeunload', () => {
+            stopStatusAutoUpdate();
+        });
     </script>
 </body>
 </html>

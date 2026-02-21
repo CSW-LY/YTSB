@@ -14,7 +14,7 @@ from app.core.cache import CacheManager, generate_cache_key, get_cache
 from app.core.config import get_settings
 from app.core.security import verify_api_key
 from app.db import async_session_maker
-from app.models.database import IntentCategory, IntentRecognitionLog
+from app.models.database import Application, IntentCategory, IntentRecognitionLog
 from app.models.schema import (
     BatchRecognizeRequest,
     BatchRecognizeResponse,
@@ -155,7 +155,7 @@ def get_failure_suggestion(failure_type: str, failure_reason: str) -> Optional[s
 async def try_llm_fallback(
     text: str,
     categories: List[IntentCategory],
-    app_config,
+    application: Application,
     previous_chain: List,
 ) -> Optional[IntentResult]:
     """
@@ -164,7 +164,7 @@ async def try_llm_fallback(
     Args:
         text: 输入文本
         categories: 意图分类列表
-        app_config: 应用配置
+        application: 应用配置
         previous_chain: 之前的识别链路
 
     Returns:
@@ -321,11 +321,11 @@ async def recognize_intent(
         log_data["is_success"] = False
         log_data["error_message"] = f"App configuration not found: {request.app_key}"
         log_data["processing_time_ms"] = (time.time() - start_time) * 1000
-        
+
         # Try LLM fallback even if app config not found
         if settings.enable_llm_fallback:
             logger.info("App config not found, attempting LLM fallback with default categories")
-            
+
             # Get all active categories as fallback
             from app.models.database import IntentCategory
             from sqlalchemy import select
@@ -334,49 +334,31 @@ async def recognize_intent(
                     select(IntentCategory).where(IntentCategory.is_active == True)
                 )
                 categories = result.scalars().all()
-            
+
             # Try LLM fallback
             if categories:
                 from app.services.recognizer import LLMRecognizer
                 llm_recognizer = LLMRecognizer()
                 await llm_recognizer.initialize()
-                
+
                 if llm_recognizer.enabled:
                     try:
-                        start_llm_time = time.time()
-                        llm_result = await llm_recognizer.recognize(
-                            text=request.text,
-                            categories=categories,
-                            rules=[],
-                            context=None
+                        result = await try_llm_fallback(
+                            llm_recognizer,
+                            request.text,
+                            categories,
+                            [],
+                            [],
+                            start_time,
+                            log_data.get("recognition_chain", [])
                         )
-                        llm_time = (time.time() - start_llm_time) * 1000
-                        
-                        if llm_result:
-                            # LLM fallback successful
-                            processing_time = (time.time() - start_time) * 1000
-                            response = build_success_response(
-                                llm_result,
-                                processing_time,
-                                True,
-                                "LLM fallback (app config not found)"
-                            )
-                            
-                            log_data["recognized_intent"] = llm_result.intent
-                            log_data["confidence"] = llm_result.confidence
-                            log_data["processing_time_ms"] = processing_time
-                            log_data["recognition_chain"] = json.dumps([{
-                                "recognizer": "llm_fallback",
-                                "status": "success",
-                                "intent": llm_result.intent,
-                                "confidence": llm_result.confidence,
-                                "time_ms": llm_time
-                            }])
+
+                        if result:
                             await save_log_async(log_data)
                             return response
                     except Exception as e:
                         logger.error(f"LLM fallback error: {e}")
-        
+
         # If LLM fallback fails or not enabled, return failure
         await save_log_async(log_data)
         return build_failure_response(
@@ -386,7 +368,7 @@ async def recognize_intent(
             processing_time_ms=(time.time() - start_time) * 1000
         )
 
-    app_config = context_data["app_config"]
+    application = context_data["application"]
     categories = context_data["categories"]
     rules = context_data["rules"]
 
@@ -402,8 +384,8 @@ async def recognize_intent(
             processing_time_ms=(time.time() - start_time) * 1000
         )
 
-    # Create recognizer chain based on app config
-    recognizer = await get_recognizer_chain_for_app(app_config)
+    # Create recognizer chain based on application config
+    recognizer = await get_recognizer_chain_for_app(application)
 
     # Run recognition
     result = None
@@ -430,14 +412,14 @@ async def recognize_intent(
     # Handle no match
     if not result:
         recognition_chain = getattr(recognizer, 'last_chain', [])
-        
+
         # 尝试LLM兜底
-        if app_config.enable_llm_fallback or settings.enable_llm_fallback:
+        if application.enable_llm_fallback or settings.enable_llm_fallback:
             logger.info("No match found, attempting LLM fallback")
             llm_result = await try_llm_fallback(
                 text=request.text,
                 categories=categories,
-                app_config=app_config,
+                application=application,
                 previous_chain=recognition_chain.copy()
             )
 
@@ -458,16 +440,16 @@ async def recognize_intent(
                 await save_log_async(log_data)
                 
                 # Cache result
-                if settings.enable_cache and app_config.enable_cache:
+                if settings.enable_cache and application.enable_cache:
                     cache_key = generate_cache_key(request.app_key, request.text, request.context)
                     await cache.set(cache_key, response.model_dump())
-                
+
                 return response
 
         # LLM兜底失败或未启用，尝试fallback_intent
-        if app_config.fallback_intent_code:
+        if application.fallback_intent_code:
             fallback_category = next(
-                (c for c in categories if c.code == app_config.fallback_intent_code),
+                (c for c in categories if c.code == application.fallback_intent_code),
                 None,
             )
 
@@ -514,10 +496,10 @@ async def recognize_intent(
         )
 
     # Check confidence threshold
-    threshold = app_config.confidence_threshold or settings.default_confidence_threshold
+    threshold = application.confidence_threshold or settings.default_confidence_threshold
     if result.confidence < threshold:
         # 尝试LLM兜底
-        if app_config.enable_llm_fallback:
+        if application.enable_llm_fallback:
             logger.info(
                 f"Confidence {result.confidence:.2f} below threshold {threshold}, "
                 f"attempting LLM fallback"
@@ -525,7 +507,7 @@ async def recognize_intent(
             llm_result = await try_llm_fallback(
                 text=request.text,
                 categories=categories,
-                app_config=app_config,
+                application=application,
                 previous_chain=result.recognition_chain.copy()
             )
 
@@ -538,18 +520,18 @@ async def recognize_intent(
                     True,
                     f"LLM fallback (original confidence {result.confidence:.2f} < {threshold})"
                 )
-                
+
                 log_data["recognized_intent"] = llm_result.intent
                 log_data["confidence"] = llm_result.confidence
                 log_data["processing_time_ms"] = processing_time
                 log_data["recognition_chain"] = json.dumps(llm_result.recognition_chain)
                 await save_log_async(log_data)
-                
+
                 # Cache result
-                if settings.enable_cache and app_config.enable_cache:
+                if settings.enable_cache and application.enable_cache:
                     cache_key = generate_cache_key(request.app_key, request.text, request.context)
                     await cache.set(cache_key, response.model_dump())
-                
+
                 return response
 
         # LLM兜底失败或未启用，返回带链路的失败响应
@@ -599,7 +581,7 @@ async def recognize_intent(
     await save_log_async(log_data)
 
     # Cache result
-    if settings.enable_cache and app_config.enable_cache:
+    if settings.enable_cache and application.enable_cache:
         cache_key = generate_cache_key(request.app_key, request.text, request.context)
         await cache.set(cache_key, response.model_dump())
 

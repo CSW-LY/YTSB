@@ -32,6 +32,8 @@ class LLMRecognizer(IntentRecognizer):
         self._api_key = settings.llm_api_key
         self._base_url = settings.llm_base_url
         self._model = settings.llm_model
+        self._is_connected = False
+        self._last_health_check: Optional[float] = None
 
         # Enable by default if config is provided and valid
         self._enabled = settings.enable_llm_fallback
@@ -56,6 +58,7 @@ class LLMRecognizer(IntentRecognizer):
             logger.warning("LLM recognizer incomplete configuration, disabling")
             logger.warning(f"API key: {bool(self._api_key)}, Base URL: {bool(self._base_url)}, Model: {bool(self._model)}")
             self._enabled = False
+            self._is_connected = False
             return
 
         try:
@@ -70,16 +73,17 @@ class LLMRecognizer(IntentRecognizer):
             
             if response:
                 logger.info("LLM connection test successful")
+                self._is_connected = True
             else:
                 logger.warning("LLM connection test returned no response")
-                # Don't disable the recognizer, just log the warning
+                self._is_connected = False
                 
         except httpx.HTTPError as e:
             logger.error(f"LLM connection test failed (HTTP error): {e}")
-            # Don't disable the recognizer, just log the error
+            self._is_connected = False
         except Exception as e:
             logger.error(f"LLM connection test failed (unknown error): {e}")
-            # Don't disable the recognizer, just log the error
+            self._is_connected = False
         finally:
             logger.info("LLM recognizer initialization completed")
 
@@ -297,3 +301,89 @@ If none of the categories match, respond with:
         """Close HTTP client."""
         if self._http_client:
             await self._http_client.aclose()
+            self._is_connected = False
+
+    async def health_check(self) -> Dict[str, Any]:
+        """
+        Perform LLM connection health check.
+
+        Returns:
+            Dict containing connection status and health details.
+        """
+        import time
+        from typing import Dict, Any
+
+        # Update last health check time
+        self._last_health_check = time.time()
+
+        health_status = {
+            "connected": False,
+            "enabled": self._enabled,
+            "has_client": self._http_client is not None,
+            "has_api_key": bool(self._api_key),
+            "has_base_url": bool(self._base_url),
+            "has_model": bool(self._model),
+            "last_health_check": self._last_health_check,
+            "error": None
+        }
+
+        if not self._enabled:
+            health_status["error"] = "LLM recognizer is disabled by configuration"
+            return health_status
+
+        if not self._http_client:
+            health_status["error"] = "HTTP client not initialized"
+            return health_status
+
+        if not all([self._api_key, self._base_url, self._model]):
+            health_status["error"] = "Incomplete configuration"
+            return health_status
+
+        try:
+            # Perform a simple health check with a minimal prompt
+            test_prompt = "Health check"
+            response = await self._call_llm(test_prompt)
+
+            if response:
+                self._is_connected = True
+                health_status["connected"] = True
+                health_status["response_received"] = True
+                logger.info("LLM health check passed")
+            else:
+                self._is_connected = False
+                health_status["error"] = "No response from LLM API"
+                health_status["response_received"] = False
+                logger.warning("LLM health check failed: no response")
+
+        except httpx.HTTPError as e:
+            self._is_connected = False
+            health_status["error"] = f"HTTP error: {str(e)}"
+            logger.error(f"LLM health check failed: {e}")
+        except Exception as e:
+            self._is_connected = False
+            health_status["error"] = f"Unexpected error: {str(e)}"
+            logger.error(f"LLM health check failed: {e}")
+
+        return health_status
+
+    def get_connection_status(self) -> Dict[str, Any]:
+        """
+        Get current LLM connection status without performing health check.
+
+        Returns:
+            Dict containing current connection status.
+        """
+        import time
+        from typing import Dict, Any
+
+        return {
+            "connected": self._is_connected,
+            "enabled": self._enabled,
+            "has_client": self._http_client is not None,
+            "has_api_key": bool(self._api_key),
+            "has_base_url": bool(self._base_url),
+            "has_model": bool(self._model),
+            "model_name": self._model,
+            "provider": self._base_url.split('://')[1].split('/')[0] if self._base_url else '未知',
+            "last_health_check": self._last_health_check
+        }

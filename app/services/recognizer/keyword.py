@@ -47,7 +47,7 @@ class KeywordRecognizer(IntentRecognizer):
         category_map = {c.id: c for c in categories}
 
         for rule in rules:
-            if rule.rule_type != "keyword" or not rule.is_active:
+            if rule.rule_type != "keyword" or not rule.is_active or not rule.enabled:
                 continue
 
             category = category_map.get(rule.category_id)

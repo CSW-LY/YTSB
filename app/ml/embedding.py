@@ -273,3 +273,32 @@ def get_embedding_model() -> EmbeddingModel:
     if _global_embedding_model is None:
         _global_embedding_model = EmbeddingModel()
     return _global_embedding_model
+
+
+def get_embedding_model_status() -> dict:
+    """
+    Get embedding model loading status.
+    
+    Returns:
+        Dict containing model status information
+    """
+    global _global_embedding_model
+    
+    if _global_embedding_model is None:
+        return {
+            "loaded": False,
+            "model_name": None,
+            "model_path": None,
+            "device": None,
+            "dimension": 0,
+            "initialized": False
+        }
+    
+    return {
+        "loaded": _global_embedding_model.is_loaded,
+        "model_name": _global_embedding_model.model_name,
+        "model_path": _global_embedding_model.model_path,
+        "device": _global_embedding_model.device,
+        "dimension": _global_embedding_model.dimension,
+        "initialized": _global_embedding_model._model_initialized
+    }

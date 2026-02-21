@@ -12,6 +12,7 @@ from app.core.recognizer import (
     get_recognizer_chain,
     get_recognizer_chain_for_app,
     clear_recognizer_cache,
+    get_llm_recognizer,
 )
 from app.core.security import (
     verify_admin_api_key,
@@ -31,4 +32,5 @@ __all__ = [
     "get_recognizer_chain",
     "get_recognizer_chain_for_app",
     "clear_recognizer_cache",
+    "get_llm_recognizer",
 ]
