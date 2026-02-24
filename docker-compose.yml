@@ -104,7 +104,7 @@ services:
   # PostgreSQL Database
   # ============================================================================
   postgres:
-    image: postgres:15-alpine
+    image: postgres:12
     container_name: intent-postgres
     restart: unless-stopped
     ports:
@@ -113,8 +113,9 @@ services:
       - POSTGRES_DB=intent_service
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8 --lc-collate=C --lc-ctype=C
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - D:/pgdata:/var/lib/postgresql/data
       - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - intent-network
@@ -155,6 +156,5 @@ networks:
     driver: bridge
 
 volumes:
-  postgres-data:
   redis-data:
   pgadmin-data:
